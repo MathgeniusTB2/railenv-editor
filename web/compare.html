@@ -41,6 +41,14 @@
   <p><a class="open" href="index.html?map=testmaps/every_tile.json">Open the every-tile map as one environment in the editor →</a></p>
 </header>
 <div id="summary" class="summary">loading…</div>
+<section id="real">
+  <h2>Real environment — editor vs Flatland</h2>
+  <div class="envrow">
+    <figure><img id="real-editor" alt="editor render"><figcaption>RailEnv Editor (canvas)</figcaption></figure>
+    <figure><img id="real-flatland" alt="flatland render"><figcaption>Flatland PILSVG (RenderTool)</figcaption></figure>
+  </div>
+  <div id="real-metrics" class="metrics"></div>
+</section>
 <section id="env">
   <h2>Whole environment — editor vs Flatland</h2>
   <div class="envrow">
@@ -119,6 +127,18 @@ const PALETTE=[["vertical_straight",32800],["right_turn_from_south",16386],["sim
       `${env.note}`;
   }catch(e){
     document.getElementById("env-metrics").textContent = "comparison images not generated yet — run tools/compare_env.py";
+  }
+
+  try{
+    const real = await fetch("testmaps/compare_real.json").then(r=>r.json());
+    document.getElementById("real-editor").src = real.editor;
+    document.getElementById("real-flatland").src = real.flatland;
+    document.getElementById("real-metrics").innerHTML =
+      `Flatland <b>sparse_rail_generator</b> env: ${real.grid[0]}×${real.grid[1]}, ${real.agents} agents, ` +
+      `${real.level_free} level-free · mean abs pixel diff: <b>${real.mae}</b>. ` +
+      `Note: Flatland's terrain is target/city-driven (buildings cluster around targets); the editor's terrain ignores targets.`;
+  }catch(e){
+    document.getElementById("real-metrics").textContent = "real-env comparison not generated yet — run tools/compare_real_env.py";
   }
 })();
 </script>

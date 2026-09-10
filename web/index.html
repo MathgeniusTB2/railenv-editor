@@ -98,6 +98,8 @@ let W=20,H=20, ori=[0,0];
 let grid=Array.from({length:H},()=>Array(W).fill(0));
 const stations=new Set();               // station markers, absolute "ax,ay"
 const levelFree=new Map();             // level-free diamond cells: absolute "ax,ay" -> rotation degrees
+let agents=[];                          // view-only agent markers (absolute x,y + direction) from loaded envs
+const AGENT_COLORS=['#d50000','#0091ea','#00c853','#ffab00','#aa00ff','#00bfa5','#ff6d00','#3d5afe'];
 let diamondVariant="diamond_crossing";  // Diamond tile dropdown: normal or level-free
 let current=VALUE.vertical_straight, currentName="vertical_straight", rot=0;
 let tool="paint", sel=null, marquee=null, clip=null, drag=null;
@@ -133,6 +135,13 @@ function drawRotated(key,c,r,deg,alpha){const im=images[key];if(!im)return;
   const x=c*CELL, y=r*CELL;
   ctx.save(); if(alpha!=null)ctx.globalAlpha=alpha;
   ctx.translate(x+CELL/2,y+CELL/2); ctx.rotate((deg||0)*Math.PI/180); ctx.drawImage(im,-CELL/2,-CELL/2,CELL,CELL); ctx.restore();}
+function drawAgent(a){const x=a.x*CELL, y=a.y*CELL, cx=x+CELL/2, cy=y+CELL/2, rad=CELL*0.26;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,rad,0,Math.PI*2); ctx.fillStyle=AGENT_COLORS[(a.i||0)%AGENT_COLORS.length]; ctx.fill();
+  ctx.lineWidth=3; ctx.strokeStyle='#fff'; ctx.beginPath(); ctx.moveTo(cx,cy);
+  const dx=[0,1,0,-1][a.dir||0], dy=[-1,0,1,0][a.dir||0];
+  ctx.lineTo(cx+dx*rad*0.85, cy+dy*rad*0.85); ctx.stroke();
+  ctx.restore();}
 function spriteFor(c,r){
   const g=grid[r][c]; if(g!==0)return 'r'+g;
   const X=ori[0]+c, Y=ori[1]+r;   // anchor terrain to absolute coords so growth never re-rolls it
@@ -170,6 +179,8 @@ function render(){
   for(let r=r0;r<r1;r++)for(let c=c0;c<c1;c++){
     if(hasStation(c,r)) drawSprite('stat',c,r);
   }
+  // pass 3: agents (view-only, from a loaded env)
+  for(const a of agents)drawAgent(a);
   // selection + marquee + ghost overlays (world coords)
   if(sel){ctx.fillStyle='rgba(47,111,179,.18)';ctx.fillRect(sel[0]*CELL,sel[1]*CELL,(sel[2]-sel[0]+1)*CELL,(sel[3]-sel[1]+1)*CELL);
     ctx.strokeStyle='#2f6fb3';ctx.lineWidth=2;ctx.strokeRect(sel[0]*CELL,sel[1]*CELL,(sel[2]-sel[0]+1)*CELL,(sel[3]-sel[1]+1)*CELL);}
@@ -191,7 +202,7 @@ function render(){
 let hover=null, lastHoverKey=null;
 function resizeCanvas(){cv.width=Math.max(1,wrap.clientWidth);cv.height=Math.max(1,wrap.clientHeight);render();}
 function centerView(){pan.x=(wrap.clientWidth-W*CELL*zoom)/2;pan.y=(wrap.clientHeight-H*CELL*zoom)/2;render();}
-function setGrid(w,h){if(!w||!h)return;W=w;H=h;bgSeed=bgFor(W,H);grid=Array.from({length:H},()=>Array(W).fill(0));stations.clear();levelFree.clear();ori=[0,0];resizeCanvas();centerView();updateStatus();}
+function setGrid(w,h){if(!w||!h)return;W=w;H=h;bgSeed=bgFor(W,H);grid=Array.from({length:H},()=>Array(W).fill(0));stations.clear();levelFree.clear();agents=[];ori=[0,0];resizeCanvas();centerView();updateStatus();}
 
 // ---------------- growth (all directions, content preserved) ----------------
 function inAbs(X,Y){return X>=ori[0]&&X<ori[0]+W&&Y>=ori[1]&&Y<ori[1]+H;}
@@ -414,12 +425,12 @@ function deleteSel(){ if(!sel)return; record();
 
 // ---------------- undo (snapshots) ----------------
 const undo=[],redo=[];let initializing=true;
-function snap(){return JSON.stringify({W,H,ori,grid,bgSeed,stations:[...stations],levelFree:[...levelFree]});}
+function snap(){return JSON.stringify({W,H,ori,grid,bgSeed,agents,stations:[...stations],levelFree:[...levelFree]});}
 function record(){if(initializing)return;undo.push(snap());if(undo.length>300)undo.shift();redo.length=0;}
-function apply(s){const d=JSON.parse(s);W=d.W;H=d.H;ori=d.ori;grid=d.grid;bgSeed=d.bgSeed==null?bgFor(W,H):d.bgSeed;stations.clear();(d.stations||[]).forEach(k=>stations.add(k));levelFree.clear();(d.levelFree||[]).forEach(e=>{if(Array.isArray(e))levelFree.set(e[0],e[1]==null?0:e[1]);else levelFree.set(e,0);});resizeCanvas();updateStatus();}
+function apply(s){const d=JSON.parse(s);W=d.W;H=d.H;ori=d.ori;grid=d.grid;bgSeed=d.bgSeed==null?bgFor(W,H):d.bgSeed;agents=d.agents||[];stations.clear();(d.stations||[]).forEach(k=>stations.add(k));levelFree.clear();(d.levelFree||[]).forEach(e=>{if(Array.isArray(e))levelFree.set(e[0],e[1]==null?0:e[1]);else levelFree.set(e,0);});resizeCanvas();updateStatus();}
 function undoOp(){if(undo.length){redo.push(snap());apply(undo.pop());}}
 function redoOp(){if(redo.length){undo.push(snap());apply(redo.pop());}}
-function clearAll(){record();grid=Array.from({length:H},()=>Array(W).fill(0));stations.clear();levelFree.clear();resizeCanvas();}
+function clearAll(){record();grid=Array.from({length:H},()=>Array(W).fill(0));stations.clear();levelFree.clear();agents=[];resizeCanvas();}
 function trim(){ let minx=0,miny=0,maxx=W-1,maxy=H-1,found=false;
   for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(grid[y][x]!==0||hasStation(x,y)||hasLevelFree(x,y)){
     if(!found){minx=maxx=x;miny=maxy=y;found=true;}else{minx=Math.min(minx,x);maxx=Math.max(maxx,x);miny=Math.min(miny,y);maxy=Math.max(maxy,y);}}
@@ -445,7 +456,8 @@ document.getElementById('file').onchange=e=>{const f=e.target.files[0];if(!f)ret
   rd.readAsArrayBuffer(f);e.target.value='';};
 function loadJson(d){ record(); W=d.width||20;H=d.height||20;ori=d.origin||[0,0];bgSeed=bgFor(W,H);grid=d.grid.map(row=>row.slice());
   stations.clear();(d.stations||[]).forEach(c=>stations.add(c[0]+','+c[1]));
-  levelFree.clear();(d.level_free||[]).forEach(c=>levelFree.set(c[0]+','+c[1],c[2]==null?0:c[2]));resizeCanvas();centerView();updateStatus();}
+  levelFree.clear();(d.level_free||[]).forEach(c=>levelFree.set(c[0]+','+c[1],c[2]==null?0:c[2]));
+  agents=(d.agents||[]).map((a,i)=>({x:a[0],y:a[1],dir:a[2]||0,i}));resizeCanvas();centerView();updateStatus();}
 function loadMpk(buf){ const d=EnvPkl.parseEnvMpk(buf); if(!d.grid)throw new Error('no grid'); record();
   grid=d.grid.map(row=>row.slice()); H=grid.length; W=grid[0].length; ori=d.origin||[0,0]; bgSeed=bgFor(W,H);
   stations.clear();(d.stations||[]).forEach(c=>stations.add(c[0]+','+c[1]));
@@ -496,7 +508,7 @@ document.getElementById('gw').onchange=e=>{record();setGrid(parseInt(e.target.va
 document.getElementById('gh').onchange=e=>{record();setGrid(W,parseInt(e.target.value)||20);};
 
 function updateStatus(){document.getElementById('status-text').textContent=
-  `Grid ${W}×${H} @(${ori[0]},${ori[1]}) · ${stations.size} stations · ${levelFree.size} level-free · tool ${tool}`;
+  `Grid ${W}×${H} @(${ori[0]},${ori[1]}) · ${stations.size} stations · ${levelFree.size} level-free · ${agents.length} agents · tool ${tool}`;
   updateRotationVisible();
 }
 
