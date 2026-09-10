@@ -38,8 +38,10 @@ python -m http.server 8080     # then open http://localhost:8080
   meta (Flatland itself always draws the sprite in its one fixed orientation).
   Overwriting the cell with any other rail (or erasing) **auto-clears** the flag.
   Copy/paste, undo, trim and load preserve it.
-- Scroll = pan (you can pan into the empty margin around the grid and draw there —
-  the grid grows), Cmd/Ctrl+scroll = zoom.
+- **Infinite panning**: no scrollbars — the canvas fills the view and pans without
+  bounds via wheel, middle-drag, the **Move** tool (`M`), or arrow keys. **Cmd/Ctrl+wheel**
+  zooms around the cursor. Drawing just off the grid (but on-screen) auto-grows it;
+  dragging off the canvas edge pauses placement so the grid can't run away.
 
 ## Export / Open
 

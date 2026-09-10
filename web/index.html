@@ -31,9 +31,8 @@
   .dmitem.sel{background:#e8f0fa;box-shadow:inset 0 0 0 1px #2f6fb355}
   .dmitem img{width:30px;height:30px;image-rendering:pixelated}
   #tools{display:flex;gap:4px;padding:6px 10px;background:#eef2ee;border-bottom:1px solid #cfd8cf}
-  #canvas-wrap{flex:1;overflow:auto;position:relative;background:#dfe6df}
-  #stage{width:max-content;margin:auto}
-  canvas{display:block}
+  #canvas-wrap{flex:1;overflow:hidden;position:relative;background:#dfe6df}
+  canvas{display:block;position:absolute;top:0;left:0}
   #inspector{width:230px;flex-shrink:0;padding:8px 10px;background:#f6f8f6;border-left:1px solid #cfd8cf;overflow:auto;font-size:12px;line-height:1.5}
   #inspector h3{margin:0 0 6px;font-size:12px;color:#4a555e}
   #status{padding:5px 12px;font-size:12px;color:#4a555e;background:#f4f7f4;border-top:1px solid #cfd8cf}
@@ -47,18 +46,18 @@
     <strong>RailEnv Editor</strong>
     <button id="undo" title="Ctrl+Z">Undo</button><button id="redo" title="Ctrl+Y">Redo</button>
     <button id="clear">Clear</button><button id="trim">Trim to content</button>
-    <button id="new">New</button><button id="open">Open</button>
+    <button id="new">New</button><button id="open">Open</button><button id="center" title="Center the view on the grid">Center</button>
     <button id="exmpk">Export .mpk</button>
     <input id="file" type="file" accept=".mpk,.json,application/json,application/octet-stream" style="display:none">
     <label>W <input id="gw" type="number" value="20" min="1" max="120"></label>
     <label>H <input id="gh" type="number" value="20" min="1" max="120"></label>
-    <span id="hint">drag draw · 0-9 tiles · 7/▾ diamond (level-free) · L level-free · R rot · F flip · E erase · S select · M pan · scroll pan · Cmd+scroll zoom</span>
+    <span id="hint">drag draw · 0-9 tiles · 7/▾ diamond (level-free) · L level-free · R rot · F flip · E erase · S select · M pan · wheel/middle-drag pan · Cmd+wheel zoom</span>
   </header>
   <div id="palette"></div>
   <div id="mid">
     <div style="flex:1;display:flex;flex-direction:column;min-width:0">
       <div id="tools"></div>
-      <div id="canvas-wrap"><div id="stage"><canvas id="cv"></canvas></div></div>
+      <div id="canvas-wrap"><canvas id="cv"></canvas></div>
     </div>
     <div id="inspector"><h3>Inspector</h3><div id="insp-body">select a cell</div></div>
   </div>
@@ -115,8 +114,8 @@ let pendingTool="paint";
 // ---------------- assets ----------------
 let manifest=null, images={}, loaded=false;
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-const CELL=60, AIR=6, wrap=document.getElementById('canvas-wrap'), inspBody=document.getElementById('insp-body');
-let zoom=1;
+const CELL=60, wrap=document.getElementById('canvas-wrap'), inspBody=document.getElementById('insp-body');
+let zoom=1, pan={x:0,y:0};   // pan: screen-px translation of the world origin (infinite panning)
 
 fetch('assets/manifest.json').then(r=>r.json()).then(m=>{
   manifest=m; const jobs=[];
@@ -139,9 +138,9 @@ function cityIdx(c,r){const v=cities.get((ori[0]+c)+','+(ori[1]+r));return v==nu
 function hasStation(c,r){return stations.has((ori[0]+c)+','+(ori[1]+r));}
 function hasLevelFree(c,r){return levelFree.has((ori[0]+c)+','+(ori[1]+r));}
 function levelFreeRot(c,r){const v=levelFree.get((ori[0]+c)+','+(ori[1]+r));return v==null?0:v;}
-function drawSprite(key,c,r){const im=images[key];if(im)ctx.drawImage(im,(c+AIR)*CELL,(r+AIR)*CELL,CELL,CELL);}
+function drawSprite(key,c,r){const im=images[key];if(im)ctx.drawImage(im,c*CELL,r*CELL,CELL,CELL);}
 function drawRotated(key,c,r,deg,alpha){const im=images[key];if(!im)return;
-  const x=(c+AIR)*CELL, y=(r+AIR)*CELL;
+  const x=c*CELL, y=r*CELL;
   ctx.save(); if(alpha!=null)ctx.globalAlpha=alpha;
   ctx.translate(x+CELL/2,y+CELL/2); ctx.rotate((deg||0)*Math.PI/180); ctx.drawImage(im,-CELL/2,-CELL/2,CELL,CELL); ctx.restore();}
 function spriteFor(c,r){
@@ -159,9 +158,15 @@ function spriteFor(c,r){
 }
 function render(){
   if(!loaded)return;
-  ctx.clearRect(0,0,canvasW(),canvasH());
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.setTransform(zoom,0,0,zoom,pan.x,pan.y);
+  // visible cell range (cull), padded by 1 for the two-cell mountain overlay
+  const vc0=Math.floor(-pan.x/zoom/CELL), vc1=Math.ceil((cv.width-pan.x)/zoom/CELL);
+  const vr0=Math.floor(-pan.y/zoom/CELL), vr1=Math.ceil((cv.height-pan.y)/zoom/CELL);
+  const c0=Math.max(0,vc0-1), c1=Math.min(W,vc1+1), r0=Math.max(0,vr0-1), r1=Math.min(H,vr1+1);
   // pass 1: rail + terrain (incl. two-cell mountains)
-  for(let r=0;r<H;r++)for(let c=0;c<W;c++){
+  for(let r=r0;r<r1;r++)for(let c=c0;c<c1;c++){
     if(grid[r][c]===33825&&hasLevelFree(c,r)){drawRotated('r666',c,r,levelFreeRot(c,r));continue;}
     const key=spriteFor(c,r);
     if(key&&key==='s'+(manifest.scenery.length-1)){
@@ -171,19 +176,18 @@ function render(){
     } else if(key)drawSprite(key,c,r);
   }
   // pass 2: markers on top (like flatland's target layer) — cities and stations
-  for(let r=0;r<H;r++)for(let c=0;c<W;c++){
+  for(let r=r0;r<r1;r++)for(let c=c0;c<c1;c++){
     if(hasCity(c,r)){drawSprite('b'+(cityIdx(c,r)%manifest.buildings.length),c,r);}
     if(hasStation(c,r)) drawSprite('stat',c,r);
   }
-  // selection + marquee + ghost overlays (offset by AIR)
-  const ox=AIR*CELL, oy=AIR*CELL;
-  if(sel){ctx.fillStyle='rgba(47,111,179,.18)';ctx.fillRect(ox+sel[0]*CELL,oy+sel[1]*CELL,(sel[2]-sel[0]+1)*CELL,(sel[3]-sel[1]+1)*CELL);
-    ctx.strokeStyle='#2f6fb3';ctx.lineWidth=2;ctx.strokeRect(ox+sel[0]*CELL,oy+sel[1]*CELL,(sel[2]-sel[0]+1)*CELL,(sel[3]-sel[1]+1)*CELL);}
-  if(marquee){ctx.strokeStyle='#c98a00';ctx.setLineDash([6,4]);ctx.lineWidth=2;ctx.strokeRect(ox+marquee[0]*CELL,oy+marquee[1]*CELL,(marquee[2]-marquee[0]+1)*CELL,(marquee[3]-marquee[1]+1)*CELL);ctx.setLineDash([]);}
+  // selection + marquee + ghost overlays (world coords)
+  if(sel){ctx.fillStyle='rgba(47,111,179,.18)';ctx.fillRect(sel[0]*CELL,sel[1]*CELL,(sel[2]-sel[0]+1)*CELL,(sel[3]-sel[1]+1)*CELL);
+    ctx.strokeStyle='#2f6fb3';ctx.lineWidth=2;ctx.strokeRect(sel[0]*CELL,sel[1]*CELL,(sel[2]-sel[0]+1)*CELL,(sel[3]-sel[1]+1)*CELL);}
+  if(marquee){ctx.strokeStyle='#c98a00';ctx.setLineDash([6,4]);ctx.lineWidth=2;ctx.strokeRect(marquee[0]*CELL,marquee[1]*CELL,(marquee[2]-marquee[0]+1)*CELL,(marquee[3]-marquee[1]+1)*CELL);ctx.setLineDash([]);}
   if(hover && tool!=="select"){
-    const hx=ox+hover.c*CELL, hy=oy+hover.r*CELL; let im=null;
+    const hx=hover.c*CELL, hy=hover.r*CELL; let im=null;
     if(tool==="erase"){ctx.fillStyle='rgba(239,83,80,.35)';ctx.fillRect(hx,hy,CELL,CELL);}
-    else if(currentName===CITYNAME)im=images['city'];
+    else if(currentName===CITYNAME)im=images['b'+(currentCity%manifest.buildings.length)];
     else if(currentName===STATIONNAME)im=images['stat'];
     else if(currentName===EMPTYNAME){ctx.fillStyle='rgba(255,255,255,.55)';ctx.fillRect(hx,hy,CELL,CELL);}
     else if(currentName===LEVELFREENAME){drawRotated('r666',hover.c,hover.r,rot,.6);}
@@ -193,12 +197,11 @@ function render(){
     }
     if(im&&(currentName===CITYNAME||currentName===STATIONNAME)){ctx.globalAlpha=.7;ctx.drawImage(im,hx,hy,CELL,CELL);ctx.globalAlpha=1;}
   }
+  ctx.setTransform(1,0,0,1,0,0);
 }
 let hover=null, lastHoverKey=null;
-function canvasW(){return Math.max(1,Math.round((W+2*AIR)*CELL*zoom));}
-function canvasH(){return Math.max(1,Math.round((H+2*AIR)*CELL*zoom));}
-function resizeCanvas(){cv.width=canvasW();cv.height=canvasH();cv.style.width=canvasW()+'px';cv.style.height=canvasH()+'px';render();}
-function centerView(){wrap.scrollLeft=(AIR+W/2)*CELL*zoom-wrap.clientWidth/2;wrap.scrollTop=(AIR+H/2)*CELL*zoom-wrap.clientHeight/2;}
+function resizeCanvas(){cv.width=Math.max(1,wrap.clientWidth);cv.height=Math.max(1,wrap.clientHeight);render();}
+function centerView(){pan.x=(wrap.clientWidth-W*CELL*zoom)/2;pan.y=(wrap.clientHeight-H*CELL*zoom)/2;render();}
 function setGrid(w,h){if(!w||!h)return;W=w;H=h;grid=Array.from({length:H},()=>Array(W).fill(0));cities.clear();stations.clear();levelFree.clear();ori=[0,0];resizeCanvas();updateStatus();}
 
 // ---------------- growth (all directions, content preserved) ----------------
@@ -209,6 +212,7 @@ function growToAbs(X,Y){
   const maxX=Math.max(ori[0]+W-1,X),maxY=Math.max(ori[1]+H-1,Y);
   const nw=maxX-minX+1,nh=maxY-minY+1,ng=Array.from({length:nh},()=>Array(nw).fill(0));
   for(let r=0;r<H;r++)for(let c=0;c<W;c++)ng[(ori[1]+r)-minY][(ori[0]+c)-minX]=grid[r][c];
+  pan.x+=(minX-ori[0])*CELL*zoom; pan.y+=(minY-ori[1])*CELL*zoom;   // anchor view: existing content stays put
   grid=ng;W=nw;H=nh;ori=[minX,minY];resizeCanvas();
 }
 function placeAbs(X,Y){
@@ -347,7 +351,8 @@ let selCell=null;
 
 // ---------------- coordinates ----------------
 function cellAt(e){const rect=cv.getBoundingClientRect();
-  return {c:Math.floor((e.clientX-rect.left)/CELL/zoom)-AIR, r:Math.floor((e.clientY-rect.top)/CELL/zoom)-AIR};}
+  return {c:Math.floor((e.clientX-rect.left-pan.x)/zoom/CELL), r:Math.floor((e.clientY-rect.top-pan.y)/zoom/CELL)};}
+function pointerInCanvas(e){const r=cv.getBoundingClientRect();return e.clientX>=r.left&&e.clientX<r.right&&e.clientY>=r.top&&e.clientY<r.bottom;}
 function absFromCell(cell){return {X:ori[0]+cell.c, Y:ori[1]+cell.r};}
 function cellFromAbs(X,Y){return {c:X-ori[0], r:Y-ori[1]};}
 
@@ -361,15 +366,16 @@ wrap.addEventListener('mousedown',e=>{
   if(tool==='select'){selCell=[ab.X,ab.Y];sel=null;marquee=[cell.c,cell.r,cell.c,cell.r];
     drag={mode:'select',start:cell};render();updateInspector();return;}
   if(tool==='move'){panning=true;panStart=[e.clientX,e.clientY];return;}
-  drag={mode:tool,start:cell,last:cell};if(tool!=='erase'||inAbs(ab.X,ab.Y))placeAbs(ab.X,ab.Y);render();
+  drag={mode:tool,start:cell,startAbs:ab,last:cell};if(tool!=='erase'||inAbs(ab.X,ab.Y))placeAbs(ab.X,ab.Y);render();
 });
 window.addEventListener('mousemove',e=>{
   if(panning){const d=[e.clientX-panStart[0],e.clientY-panStart[1]];panStart=[e.clientX,e.clientY];
-    wrap.scrollLeft-=d[0];wrap.scrollTop-=d[1];return;}
+    pan.x+=d[0];pan.y+=d[1];render();return;}
+  const inside=pointerInCanvas(e);
   const cell=cellAt(e);
   if(tool==='select'&&drag&&drag.mode==='select'){if(marquee){marquee[2]=cell.c;marquee[3]=cell.r;sel=null;}}
   else if(drag&&(drag.mode==='paint'||drag.mode==='movex')){/* handled below */ }
-  if(drag&&(tool==='paint'||tool==='erase')){
+  if(drag&&(tool==='paint'||tool==='erase')&&inside){   // pause at the edge (no runaway growth)
     if(tool==='erase'){
       // freehand: erase every cell swept (interpolate so fast drags leave no gaps)
       const a=drag.last||drag.start, b=cell;
@@ -378,16 +384,17 @@ window.addEventListener('mousemove',e=>{
       drag.last=cell;
     } else {
       const ab=absFromCell(cell); growToAbs(ab.X,ab.Y);
-      // straight segment from drag start
-      const a=drag.start, abx=cellFromAbs(ab.X,ab.Y);
+      // straight segment from drag start (absolute -> local, so growth can't shift it)
+      const a=drag.startAbs?cellFromAbs(drag.startAbs.X,drag.startAbs.Y):drag.start, abx=cellFromAbs(ab.X,ab.Y);
       const end=Math.max(0,Math.min(W-1,abx.c)), endr=Math.max(0,Math.min(H-1,abx.r));
       if(Math.abs(end-a.c)>=Math.abs(endr-a.r)){const s=end>=a.c?1:-1;for(let x=a.c;x!==end+s;x+=s)placeAbs(ori[0]+x,ori[1]+a.r);}
       else {const s=endr>=a.r?1:-1;for(let y=a.r;y!==endr+s;y+=s)placeAbs(ori[0]+a.c,ori[1]+y);}
     }
     render();
   }
-  hover=cellAt(e);
-  const hk=hover.c+','+hover.r; if(hk!==lastHoverKey){lastHoverKey=hk;updateInspector();}
+  hover=inside?cell:null;
+  const hk=hover?hover.c+','+hover.r:'';
+  if(hk!==lastHoverKey){lastHoverKey=hk;updateInspector();}
   render();
 });
 window.addEventListener('mouseup',e=>{
@@ -403,8 +410,13 @@ window.addEventListener('mouseup',e=>{
 });
 cv.addEventListener('mouseleave',()=>{if(hover){hover=null;lastHoverKey=null;updateInspector();render();}});
 cv.addEventListener('wheel',e=>{e.preventDefault();
-  if(e.ctrlKey||e.metaKey){zoom*=Math.pow(1.1,-e.deltaY/100);zoom=Math.max(.1,Math.min(20,zoom));resizeCanvas();updateRotationVisible();}
-  else{wrap.scrollLeft+=e.deltaX;wrap.scrollTop+=e.deltaY;}
+  if(e.ctrlKey||e.metaKey){
+    const rect=cv.getBoundingClientRect();
+    const wx=(e.clientX-rect.left-pan.x)/zoom, wy=(e.clientY-rect.top-pan.y)/zoom;
+    zoom*=Math.pow(1.1,-e.deltaY/100); zoom=Math.max(.1,Math.min(20,zoom));
+    pan.x=(e.clientX-rect.left)-wx*zoom; pan.y=(e.clientY-rect.top)-wy*zoom;   // zoom around cursor
+    updateRotationVisible(); render();
+  } else { pan.x-=e.deltaX; pan.y-=e.deltaY; render(); }
 },{passive:false});
 
 // ---------------- copy / paste ----------------
@@ -453,7 +465,7 @@ function trim(){ let minx=0,miny=0,maxx=W-1,maxy=H-1,found=false;
 }
 
 // ---------------- open / new / export ----------------
-document.getElementById('new').onclick=()=>{record();setGrid(20,20);render();updateStatus();};
+document.getElementById('new').onclick=()=>{record();setGrid(20,20);centerView();render();updateStatus();};
 document.getElementById('open').onclick=()=>document.getElementById('file').click();
 document.getElementById('file').onchange=e=>{const f=e.target.files[0];if(!f)return;
   const rd=new FileReader();
@@ -467,12 +479,12 @@ document.getElementById('file').onchange=e=>{const f=e.target.files[0];if(!f)ret
 function loadJson(d){ record(); W=d.width||20;H=d.height||20;ori=d.origin||[0,0];grid=d.grid.map(row=>row.slice());
   cities.clear();(d.cities||[]).forEach(c=>cities.set(c[0]+','+c[1],c[2]==null?0:c[2]));
   stations.clear();(d.stations||[]).forEach(c=>stations.add(c[0]+','+c[1]));
-  levelFree.clear();(d.level_free||[]).forEach(c=>levelFree.set(c[0]+','+c[1],c[2]==null?0:c[2]));resizeCanvas();updateStatus();}
+  levelFree.clear();(d.level_free||[]).forEach(c=>levelFree.set(c[0]+','+c[1],c[2]==null?0:c[2]));resizeCanvas();centerView();updateStatus();}
 function loadMpk(buf){ const d=EnvPkl.parseEnvMpk(buf); if(!d.grid)throw new Error('no grid'); record();
   grid=d.grid.map(row=>row.slice()); H=grid.length; W=grid[0].length; ori=d.origin||[0,0];
   cities.clear();(d.cities||[]).forEach(c=>cities.set(c[0]+','+c[1],c[2]==null?0:c[2]));
   stations.clear();(d.stations||[]).forEach(c=>stations.add(c[0]+','+c[1]));
-  levelFree.clear();(d.level_free||[]).forEach(c=>levelFree.set(c[0]+','+c[1],c[2]==null?0:c[2]));resizeCanvas();updateStatus();}
+  levelFree.clear();(d.level_free||[]).forEach(c=>levelFree.set(c[0]+','+c[1],c[2]==null?0:c[2]));resizeCanvas();centerView();updateStatus();}
 function guiMeta(){ const cs=[];cities.forEach((v,k)=>{const [x,y]=k.split(',').map(Number);cs.push([x,y,v]);});
   const ss=[];stations.forEach(k=>{const [x,y]=k.split(',').map(Number);ss.push([x,y]);});
   const lf=[];levelFree.forEach((v,k)=>{const [x,y]=k.split(',').map(Number);lf.push([x,y,v]);});
@@ -483,8 +495,9 @@ function dl(data,name,type){const a=document.createElement('a');a.href=URL.creat
 // ---------------- keys ----------------
 let arrowTimer=null,arrowKeys=new Set();
 function scrollByArrows(){const step=40;
-  if(arrowKeys.has('Left'))wrap.scrollLeft-=step; if(arrowKeys.has('Right'))wrap.scrollLeft+=step;
-  if(arrowKeys.has('Up'))wrap.scrollTop-=step; if(arrowKeys.has('Down'))wrap.scrollTop+=step;}
+  if(arrowKeys.has('Left'))pan.x+=step; if(arrowKeys.has('Right'))pan.x-=step;
+  if(arrowKeys.has('Up'))pan.y+=step; if(arrowKeys.has('Down'))pan.y-=step;
+  render();}
 window.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT')return;
   const k=e.key.toLowerCase();
@@ -506,12 +519,14 @@ window.addEventListener('keydown',e=>{
 });
 window.addEventListener('keyup',e=>{if(e.key.startsWith('Arrow')){arrowKeys.delete(e.key.replace('Arrow',''));if(!arrowKeys.size&&arrowTimer){clearInterval(arrowTimer);arrowTimer=null;}}});
 window.addEventListener('blur',()=>{arrowKeys.clear();if(arrowTimer){clearInterval(arrowTimer);arrowTimer=null;}});
+window.addEventListener('resize',()=>{resizeCanvas();});
 
 // ---------------- toolbar wiring ----------------
 document.getElementById('undo').onclick=undoOp;
 document.getElementById('redo').onclick=redoOp;
 document.getElementById('clear').onclick=clearAll;
 document.getElementById('trim').onclick=trim;
+document.getElementById('center').onclick=centerView;
 document.getElementById('exmpk').onclick=exportMpk;
 document.getElementById('gw').onchange=e=>setGrid(parseInt(e.target.value)||20,H);
 document.getElementById('gh').onchange=e=>setGrid(W,parseInt(e.target.value)||20);
