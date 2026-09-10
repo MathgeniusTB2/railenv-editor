@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RailEnv Editor</title>
+<style>
+  html,body{margin:0;height:100%;font-family:system-ui,sans-serif;background:#dfe6df;color:#20262b}
+  #wrap{display:flex;flex-direction:column;height:100%}
+  header{padding:8px 12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:#f4f7f4;border-bottom:1px solid #cfd8cf}
+  header strong{margin-right:6px}
+  button{border:1px solid #b9c6b9;border-radius:5px;padding:4px 8px;background:#fff;cursor:pointer}
+  button.active{background:#2f6fb3;color:#fff;border-color:#2f6fb3}
+  input[type=number]{width:52px}
+  #mid{display:flex;flex:1;min-height:0}
+  #palette{display:flex;gap:6px;align-items:center;padding:6px 10px;background:#eff4ef;border-bottom:1px solid #cfd8cf;overflow-x:auto;flex-shrink:0}
+  .tile{position:relative;display:flex;flex-direction:column;align-items:center;min-width:50px;background:#fff;border:1px solid #cdd6cd;border-radius:6px;padding:3px;cursor:pointer}
+  .tile.active{border-color:#2f6fb3;box-shadow:0 0 0 2px #2f6fb333}
+  .tile img{width:42px;height:42px;image-rendering:pixelated}
+  .tile .k{font-size:11px;color:#68757f}
+  .caret{position:absolute;top:1px;right:2px;font-size:10px;line-height:1;color:#4a555e;background:#fff;border:1px solid #cdd6cd;border-radius:3px;padding:0 2px;cursor:pointer}
+  .caret:hover{background:#eef2ee;border-color:#2f6fb3;color:#2f6fb3}
+  .citymenu{position:fixed;z-index:100;background:#fff;border:1px solid #b9c6b9;border-radius:8px;box-shadow:0 6px 20px #0003;padding:6px}
+  .cmtitle{font-size:11px;color:#4a555e;margin:0 0 4px 2px}
+  .cmgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;max-height:260px;overflow:auto}
+  .cmgrid img{width:36px;height:36px;image-rendering:pixelated;border:1px solid #dde4dd;border-radius:4px;cursor:pointer;background:#f4f7f4}
+  .cmgrid img:hover{border-color:#2f6fb3}
+  .cmgrid img.sel{border-color:#2f6fb3;box-shadow:0 0 0 2px #2f6fb333}
+  .dmitem{display:flex;gap:7px;align-items:center;padding:3px 6px 3px 3px;border-radius:5px;cursor:pointer;font-size:12px;white-space:nowrap}
+  .dmitem:hover{background:#eef2ee}
+  .dmitem.sel{background:#e8f0fa;box-shadow:inset 0 0 0 1px #2f6fb355}
+  .dmitem img{width:30px;height:30px;image-rendering:pixelated}
+  #tools{display:flex;gap:4px;padding:6px 10px;background:#eef2ee;border-bottom:1px solid #cfd8cf}
+  #canvas-wrap{flex:1;overflow:auto;position:relative;background:#dfe6df}
+  #stage{width:max-content;margin:auto}
+  canvas{display:block}
+  #inspector{width:230px;flex-shrink:0;padding:8px 10px;background:#f6f8f6;border-left:1px solid #cfd8cf;overflow:auto;font-size:12px;line-height:1.5}
+  #inspector h3{margin:0 0 6px;font-size:12px;color:#4a555e}
+  #status{padding:5px 12px;font-size:12px;color:#4a555e;background:#f4f7f4;border-top:1px solid #cfd8cf}
+  #hint{font-size:11px;color:#7c8892}
+  #rotbtns{display:flex;gap:4px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <strong>RailEnv Editor</strong>
+    <button id="undo" title="Ctrl+Z">Undo</button><button id="redo" title="Ctrl+Y">Redo</button>
+    <button id="clear">Clear</button><button id="trim">Trim to content</button>
+    <button id="new">New</button><button id="open">Open</button>
+    <button id="exmpk">Export .mpk</button>
+    <input id="file" type="file" accept=".mpk,.json,application/json,application/octet-stream" style="display:none">
+    <label>W <input id="gw" type="number" value="20" min="1" max="120"></label>
+    <label>H <input id="gh" type="number" value="20" min="1" max="120"></label>
+    <span id="hint">drag draw · 0-9 tiles · 7/▾ diamond (level-free) · L level-free · R rot · F flip · E erase · S select · M pan · scroll pan · Cmd+scroll zoom</span>
+  </header>
+  <div id="palette"></div>
+  <div id="mid">
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+      <div id="tools"></div>
+      <div id="canvas-wrap"><div id="stage"><canvas id="cv"></canvas></div></div>
+    </div>
+    <div id="inspector"><h3>Inspector</h3><div id="insp-body">select a cell</div></div>
+  </div>
+  <div id="status">loading…</div>
+</div>
+<script src="envpkl.js?v=5"></script>
+<script>
+"use strict";
+// ---------------- tile catalogue ----------------
+const TILES = [
+  {name:"vertical_straight", value:32800, label:"Straight", rot:true},
+  {name:"right_turn_from_south", value:16386, label:"Simple turn", rot:true},
+  {name:"simple_switch_north_left", value:37408, label:"Simple switch", rot:true},
+  {name:"symmetric_switch_from_south", value:20994, label:"Symmetrical switch", rot:true},
+  {name:"single_slip_SW", value:38433, label:"Single slip", rot:true},
+  {name:"double_slip_NW_SE", value:52275, label:"Double slip", rot:true},
+  {name:"diamond_crossing", value:33825, label:"Diamond", rot:true},
+  {name:"dead_end_from_south", value:8192, label:"Dead-end", rot:true},
+  {name:"city", value:0, label:"City", rot:false},
+  {name:"station", value:0, label:"Station", rot:false},
+  {name:"empty", value:0, label:"Empty", rot:false},
+];
+const VALUE = Object.fromEntries(TILES.map(t=>[t.name,t.value]));
+const ROT = Object.fromEntries(TILES.map(t=>[t.name,t.rot]));
+VALUE.level_free_diamond=33825; ROT.level_free_diamond=true;    // Diamond tile dropdown variant
+const LABELS={diamond_crossing:"Diamond", level_free_diamond:"Level-free diamond"};
+const HOTKEYS = {0:"station",1:"vertical_straight",2:"right_turn_from_south",3:"simple_switch_north_left",
+  4:"symmetric_switch_from_south",5:"single_slip_SW",6:"double_slip_NW_SE",7:"diamond_crossing",8:"dead_end_from_south",9:"city",l:"level_free_diamond"};
+const CITYNAME="city", STATIONNAME="station", EMPTYNAME="empty", LEVELFREENAME="level_free_diamond";
+
+// bit math (mirror of railenv_editor.core.transitions). N=0,E=1,S=2,W=3.
+const BLOCK=[12,8,4,0];
+const Bit = {
+  exit(v,inc){const o=[];for(let d=0;d<4;d++)if(v&(1<<(BLOCK[inc]+(3-d))))o.push(d);return o;},
+  build(p){let nv=0;for(const [f,t] of p)nv|=1<<((3-f)*4+(3-t));return nv;},
+  rotate(v,deg){const k=((deg%360)/90)|0;if(!k)return v;const p=[];for(let f=0;f<4;f++)for(const t of this.exit(v,f))p.push([f,t]);
+    return this.build(p.map(([f,t])=>[(f+k)%4,(t+k)%4]));},
+  flip(v){const sw={1:3,3:1};const p=[];for(let f=0;f<4;f++)for(const t of this.exit(v,f))p.push([f,t]);
+    return this.build(p.map(([f,t])=>[sw[f]??f,sw[t]??t]));},
+};
+
+// ---------------- state (origin-based absolute grid) ----------------
+let W=20,H=20, ori=[0,0];
+let grid=Array.from({length:H},()=>Array(W).fill(0));
+const cities=new Map();                 // city markers: absolute "ax,ay" -> building index
+const stations=new Set();               // station markers, absolute "ax,ay"
+const levelFree=new Map();             // level-free diamond cells: absolute "ax,ay" -> rotation degrees
+let currentCity=3;                      // selected city building (index into manifest.buildings)
+let diamondVariant="diamond_crossing";  // Diamond tile dropdown: normal or level-free
+let current=VALUE.vertical_straight, currentName="vertical_straight", rot=0;
+let tool="paint", sel=null, marquee=null, clip=null, drag=null;
+let pendingTool="paint";
+
+// ---------------- assets ----------------
+let manifest=null, images={}, loaded=false;
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const CELL=60, AIR=6, wrap=document.getElementById('canvas-wrap'), inspBody=document.getElementById('insp-body');
+let zoom=1;
+
+fetch('assets/manifest.json').then(r=>r.json()).then(m=>{
+  manifest=m; const jobs=[];
+  const add=(url,key)=>{if(images[key])return;jobs.push(new Promise(res=>{const im=new Image();
+    im.onload=()=>{images[key]=im;res();};im.onerror=()=>{images[key]=null;res();};im.src=url;}));};
+  for(const [mm,f] of Object.entries(m.rail))add('assets/'+f,'r'+mm);
+  m.scenery.forEach((f,i)=>add('assets/'+f,'s'+i));
+  m.scenery_d2.forEach((f,i)=>add('assets/'+f,'d2_'+i));
+  m.scenery_d3.forEach((f,i)=>add('assets/'+f,'d3_'+i));
+  m.scenery_water.forEach((f,i)=>add('assets/'+f,'w'+i));
+  m.buildings.forEach((f,i)=>add('assets/'+f,'b'+i));
+  if(m.station)add('assets/'+m.station,'stat');
+  Promise.all(jobs).then(()=>{loaded=true;buildUI();init();});
+});
+
+// ---------------- rendering (faithful port of graphics_pil set_rail_at) ----------------
+function bgConst(){return Math.ceil(Math.sqrt(W*W+H*H));}
+function hasCity(c,r){return cities.has((ori[0]+c)+','+(ori[1]+r));}
+function cityIdx(c,r){const v=cities.get((ori[0]+c)+','+(ori[1]+r));return v==null?0:v;}
+function hasStation(c,r){return stations.has((ori[0]+c)+','+(ori[1]+r));}
+function hasLevelFree(c,r){return levelFree.has((ori[0]+c)+','+(ori[1]+r));}
+function levelFreeRot(c,r){const v=levelFree.get((ori[0]+c)+','+(ori[1]+r));return v==null?0:v;}
+function drawSprite(key,c,r){const im=images[key];if(im)ctx.drawImage(im,(c+AIR)*CELL,(r+AIR)*CELL,CELL,CELL);}
+function drawRotated(key,c,r,deg,alpha){const im=images[key];if(!im)return;
+  const x=(c+AIR)*CELL, y=(r+AIR)*CELL;
+  ctx.save(); if(alpha!=null)ctx.globalAlpha=alpha;
+  ctx.translate(x+CELL/2,y+CELL/2); ctx.rotate((deg||0)*Math.PI/180); ctx.drawImage(im,-CELL/2,-CELL/2,CELL,CELL); ctx.restore();}
+function spriteFor(c,r){
+  const g=grid[r][c]; if(g!==0)return 'r'+g;
+  const bg=bgConst(),nb=manifest.buildings.length,ns=manifest.scenery.length;
+  if(bg<=4+Math.ceil(((c*r+c)%10)/1)){
+    let a=bg%nb; if((c+r+c*r)%13>11)return 's'+(a%ns);
+    if((c+r+c*r)%3===0)a=(a+(c+r+c*r))%nb; return 'b'+a;
+  }
+  if(bg>5+((c*r+c)%3)||((c**3+r*r+c*r)%10===0)){
+    let a=bg-4,a2=a+(c+r+c*r+c**3+r**4); if(a2%64>11)a=a2; const al=a%ns;
+    return (a2%50===49)?'w0':'s'+al;
+  }
+  return 'r0';
+}
+function render(){
+  if(!loaded)return;
+  ctx.clearRect(0,0,canvasW(),canvasH());
+  // pass 1: rail + terrain (incl. two-cell mountains)
+  for(let r=0;r<H;r++)for(let c=0;c<W;c++){
+    if(grid[r][c]===33825&&hasLevelFree(c,r)){drawRotated('r666',c,r,levelFreeRot(c,r));continue;}
+    const key=spriteFor(c,r);
+    if(key&&key==='s'+(manifest.scenery.length-1)){
+      const bg=bgConst(),a=bg-4,a2=a+(c+r+c*r+c**3+r**4);
+      if(a2%11>3&&c>1&&r%7===1&&grid[r][c-1]===0){drawSprite('d2_0',c-1,r);drawSprite('d2_1',c,r);}
+      else drawSprite(key,c,r);
+    } else if(key)drawSprite(key,c,r);
+  }
+  // pass 2: markers on top (like flatland's target layer) — cities and stations
+  for(let r=0;r<H;r++)for(let c=0;c<W;c++){
+    if(hasCity(c,r)){drawSprite('b'+(cityIdx(c,r)%manifest.buildings.length),c,r);}
+    if(hasStation(c,r)) drawSprite('stat',c,r);
+  }
+  // selection + marquee + ghost overlays (offset by AIR)
+  const ox=AIR*CELL, oy=AIR*CELL;
+  if(sel){ctx.fillStyle='rgba(47,111,179,.18)';ctx.fillRect(ox+sel[0]*CELL,oy+sel[1]*CELL,(sel[2]-sel[0]+1)*CELL,(sel[3]-sel[1]+1)*CELL);
+    ctx.strokeStyle='#2f6fb3';ctx.lineWidth=2;ctx.strokeRect(ox+sel[0]*CELL,oy+sel[1]*CELL,(sel[2]-sel[0]+1)*CELL,(sel[3]-sel[1]+1)*CELL);}
+  if(marquee){ctx.strokeStyle='#c98a00';ctx.setLineDash([6,4]);ctx.lineWidth=2;ctx.strokeRect(ox+marquee[0]*CELL,oy+marquee[1]*CELL,(marquee[2]-marquee[0]+1)*CELL,(marquee[3]-marquee[1]+1)*CELL);ctx.setLineDash([]);}
+  if(hover && tool!=="select"){
+    const hx=ox+hover.c*CELL, hy=oy+hover.r*CELL; let im=null;
+    if(tool==="erase"){ctx.fillStyle='rgba(239,83,80,.35)';ctx.fillRect(hx,hy,CELL,CELL);}
+    else if(currentName===CITYNAME)im=images['city'];
+    else if(currentName===STATIONNAME)im=images['stat'];
+    else if(currentName===EMPTYNAME){ctx.fillStyle='rgba(255,255,255,.55)';ctx.fillRect(hx,hy,CELL,CELL);}
+    else if(currentName===LEVELFREENAME){drawRotated('r666',hover.c,hover.r,rot,.6);}
+    else {
+      const v=rot?Bit.rotate(current,rot):current; im=images['r'+v];
+      if(im){ctx.globalAlpha=.6;ctx.drawImage(im,hx,hy,CELL,CELL);ctx.globalAlpha=1;}
+    }
+    if(im&&(currentName===CITYNAME||currentName===STATIONNAME)){ctx.globalAlpha=.7;ctx.drawImage(im,hx,hy,CELL,CELL);ctx.globalAlpha=1;}
+  }
+}
+let hover=null, lastHoverKey=null;
+function canvasW(){return Math.max(1,Math.round((W+2*AIR)*CELL*zoom));}
+function canvasH(){return Math.max(1,Math.round((H+2*AIR)*CELL*zoom));}
+function resizeCanvas(){cv.width=canvasW();cv.height=canvasH();cv.style.width=canvasW()+'px';cv.style.height=canvasH()+'px';render();}
+function centerView(){wrap.scrollLeft=(AIR+W/2)*CELL*zoom-wrap.clientWidth/2;wrap.scrollTop=(AIR+H/2)*CELL*zoom-wrap.clientHeight/2;}
+function setGrid(w,h){if(!w||!h)return;W=w;H=h;grid=Array.from({length:H},()=>Array(W).fill(0));cities.clear();stations.clear();levelFree.clear();ori=[0,0];resizeCanvas();updateStatus();}
+
+// ---------------- growth (all directions, content preserved) ----------------
+function inAbs(X,Y){return X>=ori[0]&&X<ori[0]+W&&Y>=ori[1]&&Y<ori[1]+H;}
+function growToAbs(X,Y){
+  if(inAbs(X,Y))return;
+  const minX=Math.min(ori[0],X),minY=Math.min(ori[1],Y);
+  const maxX=Math.max(ori[0]+W-1,X),maxY=Math.max(ori[1]+H-1,Y);
+  const nw=maxX-minX+1,nh=maxY-minY+1,ng=Array.from({length:nh},()=>Array(nw).fill(0));
+  for(let r=0;r<H;r++)for(let c=0;c<W;c++)ng[(ori[1]+r)-minY][(ori[0]+c)-minX]=grid[r][c];
+  grid=ng;W=nw;H=nh;ori=[minX,minY];resizeCanvas();
+}
+function placeAbs(X,Y){
+  if(!inAbs(X,Y))growToAbs(X,Y);
+  const c=X-ori[0],r=Y-ori[1]; if(c<0||r<0||c>=W||r>=H)return;
+  const k=X+','+Y;
+  if(tool==="erase"){grid[r][c]=0;cities.delete(k);stations.delete(k);levelFree.delete(k);}   // clear rail + markers
+  else if(currentName===CITYNAME){cities.set(k,currentCity);}            // city marker (keep rail)
+  else if(currentName===STATIONNAME){stations.add(k);}                   // station marker (keep rail)
+  else if(currentName===EMPTYNAME){grid[r][c]=0;cities.delete(k);stations.delete(k);levelFree.delete(k);}
+  else if(currentName===LEVELFREENAME){grid[r][c]=33825;levelFree.set(k,rot);}   // level-free diamond (keep markers)
+  else {const v=rot?Bit.rotate(current,rot):current;grid[r][c]=v;levelFree.delete(k);}  // rail: auto-clear level-free
+}
+
+// ---------------- palette + tools + rotation ----------------
+const pal=document.getElementById('palette'), toolsEl=document.getElementById('tools');
+let cityTileImg=null, diamondTileImg=null;
+function updateDiamondIcon(){if(diamondTileImg)diamondTileImg.src='assets/'+manifest.rail[diamondVariant===LEVELFREENAME?'666':'33825'];}
+function buildUI(){
+  TILES.forEach(t=>{
+    const el=document.createElement('div');el.className='tile';el.dataset.name=t.name;
+    const img=document.createElement('img');
+    img.src = t.name===CITYNAME ? ('assets/'+manifest.buildings[currentCity])
+            : t.name===STATIONNAME ? ('assets/'+manifest.station)
+            : t.name===EMPTYNAME ? ('assets/'+manifest.rail['0'])
+            : ('assets/'+manifest.rail[String(t.value)]);
+    el.appendChild(img);
+    const k=document.createElement('div');k.className='k';
+    k.textContent=(Object.entries(HOTKEYS).find(e=>e[1]===t.name)?.[0]??'');
+    el.appendChild(k);el.onclick=()=>selectTile(t.name);pal.appendChild(el);
+    if(t.name===CITYNAME){cityTileImg=img;
+      const caret=document.createElement('div');caret.className='caret';caret.textContent='▾';caret.title='Choose city building';
+      caret.onclick=(e)=>{e.stopPropagation();toggleCityMenu(el);};el.appendChild(caret);}
+    if(t.name==="diamond_crossing"){diamondTileImg=img;
+      const caret=document.createElement('div');caret.className='caret';caret.textContent='▾';caret.title='Diamond options (normal / level-free)';
+      caret.onclick=(e)=>{e.stopPropagation();toggleDiamondMenu(el);};el.appendChild(caret);
+      el.onclick=()=>selectTile(diamondVariant);}
+  });
+  toolsEl.innerHTML='';
+  [['paint','P','paint'],['erase','E','erase'],['select','S','select'],['move','M','move']].forEach(([n,key])=>{
+    const b=document.createElement('button');b.textContent=n;b.dataset.tool=n;b.onclick=()=>setTool(n);
+    if(n==='paint')b.classList.add('active');
+    b.title=key+' — '+n;toolsEl.appendChild(b);
+  });
+  const sep=document.createElement('span');sep.style.width='10px';toolsEl.appendChild(sep);
+  [['Copy',()=>copySel(),'Ctrl+C'],['Paste',()=>{if(hover)pasteAt(hover);},'Ctrl+V'],['Delete',()=>deleteSel(),'Del']].forEach(([label,fn,tip])=>{
+    const b=document.createElement('button');b.textContent=label;b.onclick=fn;b.title=label+' ('+tip+')';toolsEl.appendChild(b);
+  });
+  const rotWrap=document.createElement('div');rotWrap.id='rotbtns';
+  [0,90,180,270].forEach(r=>{const b=document.createElement('button');b.textContent=r+'°';b.dataset.rot=r;
+    b.onclick=()=>{rot=r;render();updateInspector();};rotWrap.appendChild(b);});
+  toolsEl.appendChild(rotWrap);
+  document.getElementById('rotbtns').style.display='none';
+}
+function selectTile(name){currentName=name;current=VALUE[name]||0;rot=0;setTool(name===EMPTYNAME?'erase':'paint');
+  document.querySelectorAll('.tile').forEach(el=>el.classList.toggle('active',el.dataset.name===name||(name===LEVELFREENAME&&el.dataset.name==='diamond_crossing')));
+  updateInspector();render();}
+function setTool(t){tool=t;document.querySelectorAll('#tools button[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));
+  if(tool!=='select'){sel=null;marquee=null;}          // leaving Select clears the selection
+  if(tool==='paint'){pendingTool='paint';} updateStatus();updateInspector();render();}
+function updateRotationVisible(){document.getElementById('rotbtns').style.display=(tool!=='select'&&tool!=='move'&&ROT[currentName])?'':'none';
+  document.querySelectorAll('#rotbtns button').forEach(b=>b.classList.toggle('active',+b.dataset.rot===rot));}
+
+// ---------------- city-building submenu ----------------
+let cityMenu=null;
+function closeCityMenu(){if(cityMenu){cityMenu.remove();cityMenu=null;}}
+function toggleCityMenu(anchor){if(cityMenu){closeCityMenu();return;}openCityMenu(anchor);}
+function openCityMenu(anchor){
+  const p=document.createElement('div');p.className='citymenu';
+  const title=document.createElement('div');title.className='cmtitle';title.textContent='City building';
+  p.appendChild(title);
+  const g=document.createElement('div');g.className='cmgrid';
+  manifest.buildings.forEach((f,i)=>{
+    const b=document.createElement('img');b.src='assets/'+f;b.title='Building #'+i;
+    if(i===currentCity)b.className='sel';
+    b.onclick=()=>{currentCity=i;if(cityTileImg)cityTileImg.src='assets/'+manifest.buildings[i];selectTile(CITYNAME);closeCityMenu();};
+    g.appendChild(b);
+  });
+  p.appendChild(g);document.body.appendChild(p);
+  const r=anchor.getBoundingClientRect();
+  p.style.left=Math.max(4,Math.min(r.left,window.innerWidth-p.offsetWidth-8))+'px';
+  p.style.top=Math.min(r.bottom+4,window.innerHeight-p.offsetHeight-8)+'px';
+  cityMenu=p;
+}
+document.addEventListener('mousedown',e=>{
+  const onCaret=e.target.classList&&e.target.classList.contains('caret');
+  if(onCaret)return;
+  if(cityMenu&&!cityMenu.contains(e.target))closeCityMenu();
+  if(diamondMenu&&!diamondMenu.contains(e.target))closeDiamondMenu();
+});
+window.addEventListener('keydown',e=>{if(e.key==='Escape'){closeCityMenu();closeDiamondMenu();}});
+
+// ---------------- diamond submenu (normal / level-free) ----------------
+let diamondMenu=null;
+function closeDiamondMenu(){if(diamondMenu){diamondMenu.remove();diamondMenu=null;}}
+function toggleDiamondMenu(anchor){if(diamondMenu){closeDiamondMenu();return;}openDiamondMenu(anchor);}
+function openDiamondMenu(anchor){
+  const p=document.createElement('div');p.className='citymenu';
+  const title=document.createElement('div');title.className='cmtitle';title.textContent='Diamond crossing';p.appendChild(title);
+  [["diamond_crossing","Diamond","33825"],["level_free_diamond","Level-free (over/under)","666"]].forEach(([name,label,key])=>{
+    const it=document.createElement('div');it.className='dmitem'+(diamondVariant===name?' sel':'');
+    const im=document.createElement('img');im.src='assets/'+manifest.rail[key];it.appendChild(im);
+    const sp=document.createElement('span');sp.textContent=label;it.appendChild(sp);
+    it.onclick=()=>{diamondVariant=name;updateDiamondIcon();selectTile(name);closeDiamondMenu();};
+    p.appendChild(it);
+  });
+  document.body.appendChild(p);
+  const r=anchor.getBoundingClientRect();
+  p.style.left=Math.max(4,Math.min(r.left,window.innerWidth-p.offsetWidth-8))+'px';
+  p.style.top=Math.min(r.bottom+4,window.innerHeight-p.offsetHeight-8)+'px';
+  diamondMenu=p;
+}
+
+// ---------------- inspector ----------------
+function cellLines(c,r){
+  const inb=(c>=0&&r>=0&&c<W&&r<H);
+  const v=inb?grid[r][c]:0;
+  let h='value '+v+'<br>'+(v?bits(v):'empty');
+  if(inb&&hasCity(c,r))h+='<br><span style="color:#a33">city</span> #'+cityIdx(c,r);
+  if(inb&&hasStation(c,r))h+='<br><span style="color:#2f6fb3">station</span>';
+  if(inb&&hasLevelFree(c,r))h+='<br><span style="color:#8a5a00">level-free crossing</span>';
+  return h;
+}
+function updateInspector(){
+  let html='';
+  const t=TILES.find(t=>t.name===currentName);html+='<b>Tile:</b> '+(t?t.label:(LABELS[currentName]||currentName))+'<br>';
+  html+='<b>Value:</b> '+current+(rot?(' rot '+rot):'')+'<br>';
+  if(hover){const X=ori[0]+hover.c,Y=ori[1]+hover.r;html+='<hr><b>Hover ('+X+','+Y+')</b><br>'+cellLines(hover.c,hover.r);}
+  if(selCell){const [X,Y]=selCell;html+='<hr><b>Cell ('+X+','+Y+')</b><br>'+cellLines(X-ori[0],Y-ori[1]);}
+  if(sel){const w=sel[2]-sel[0]+1,h=sel[3]-sel[1]+1;
+    html+='<hr><b>Selection</b> '+w+'×'+h+' ('+(w*h)+' cells)<br><span style="color:#68757f">Ctrl+C copy · Ctrl+V paste · Del clear</span>';}
+  inspBody.innerHTML=html;
+}
+function bits(v){const s=v.toString(2).padStart(16,'0');return s.slice(0,4)+' '+s.slice(4,8)+' '+s.slice(8,12)+' '+s.slice(12,16);}
+let selCell=null;
+
+// ---------------- coordinates ----------------
+function cellAt(e){const rect=cv.getBoundingClientRect();
+  return {c:Math.floor((e.clientX-rect.left)/CELL/zoom)-AIR, r:Math.floor((e.clientY-rect.top)/CELL/zoom)-AIR};}
+function absFromCell(cell){return {X:ori[0]+cell.c, Y:ori[1]+cell.r};}
+function cellFromAbs(X,Y){return {c:X-ori[0], r:Y-ori[1]};}
+
+// ---------------- mouse ----------------
+let panning=false,panStart=null;
+wrap.addEventListener('mousedown',e=>{
+  if(e.target!==cv)return;
+  if(e.button===1){panning=true;panStart=[e.clientX,e.clientY];e.preventDefault();return;}
+  if(e.button!==0)return;
+  const cell=cellAt(e),ab=absFromCell(cell);
+  if(tool==='select'){selCell=[ab.X,ab.Y];sel=null;marquee=[cell.c,cell.r,cell.c,cell.r];
+    drag={mode:'select',start:cell};render();updateInspector();return;}
+  if(tool==='move'){panning=true;panStart=[e.clientX,e.clientY];return;}
+  drag={mode:tool,start:cell,last:cell};if(tool!=='erase'||inAbs(ab.X,ab.Y))placeAbs(ab.X,ab.Y);render();
+});
+window.addEventListener('mousemove',e=>{
+  if(panning){const d=[e.clientX-panStart[0],e.clientY-panStart[1]];panStart=[e.clientX,e.clientY];
+    wrap.scrollLeft-=d[0];wrap.scrollTop-=d[1];return;}
+  const cell=cellAt(e);
+  if(tool==='select'&&drag&&drag.mode==='select'){if(marquee){marquee[2]=cell.c;marquee[3]=cell.r;sel=null;}}
+  else if(drag&&(drag.mode==='paint'||drag.mode==='movex')){/* handled below */ }
+  if(drag&&(tool==='paint'||tool==='erase')){
+    if(tool==='erase'){
+      // freehand: erase every cell swept (interpolate so fast drags leave no gaps)
+      const a=drag.last||drag.start, b=cell;
+      const dx=Math.abs(b.c-a.c), dy=Math.abs(b.r-a.r), n=Math.max(dx,dy,1);
+      for(let i=0;i<=n;i++){const x=Math.round(a.c+(b.c-a.c)*i/n), y=Math.round(a.r+(b.r-a.r)*i/n);const X=ori[0]+x,Y=ori[1]+y;if(inAbs(X,Y))placeAbs(X,Y);}
+      drag.last=cell;
+    } else {
+      const ab=absFromCell(cell); growToAbs(ab.X,ab.Y);
+      // straight segment from drag start
+      const a=drag.start, abx=cellFromAbs(ab.X,ab.Y);
+      const end=Math.max(0,Math.min(W-1,abx.c)), endr=Math.max(0,Math.min(H-1,abx.r));
+      if(Math.abs(end-a.c)>=Math.abs(endr-a.r)){const s=end>=a.c?1:-1;for(let x=a.c;x!==end+s;x+=s)placeAbs(ori[0]+x,ori[1]+a.r);}
+      else {const s=endr>=a.r?1:-1;for(let y=a.r;y!==endr+s;y+=s)placeAbs(ori[0]+a.c,ori[1]+y);}
+    }
+    render();
+  }
+  hover=cellAt(e);
+  const hk=hover.c+','+hover.r; if(hk!==lastHoverKey){lastHoverKey=hk;updateInspector();}
+  render();
+});
+window.addEventListener('mouseup',e=>{
+  if(panning){panning=false;return;}
+  if(!drag)return;
+  if(tool==='select'&&drag.mode==='select'){
+    const x0=Math.max(0,Math.min(marquee[0],marquee[2])),x1=Math.min(W-1,Math.max(marquee[0],marquee[2]));
+    const y0=Math.max(0,Math.min(marquee[1],marquee[3])),y1=Math.min(H-1,Math.max(marquee[1],marquee[3]));
+    sel=(x1>=x0&&y1>=y0)?[x0,y0,x1,y1]:null; marquee=null; updateInspector();
+  }
+  if(tool==='paint'||tool==='erase'){record();}
+  drag=null;render();
+});
+cv.addEventListener('mouseleave',()=>{if(hover){hover=null;lastHoverKey=null;updateInspector();render();}});
+cv.addEventListener('wheel',e=>{e.preventDefault();
+  if(e.ctrlKey||e.metaKey){zoom*=Math.pow(1.1,-e.deltaY/100);zoom=Math.max(.1,Math.min(20,zoom));resizeCanvas();updateRotationVisible();}
+  else{wrap.scrollLeft+=e.deltaX;wrap.scrollTop+=e.deltaY;}
+},{passive:false});
+
+// ---------------- copy / paste ----------------
+function copySel(){
+  if(!sel)return; const [x0,y0,x1,y1]=sel, g=[], cm=[], sm=[], lm=[]; let has=false;
+  for(let y=y0;y<=y1;y++){const row=[],crow=[],srow=[],lrow=[];
+    for(let x=x0;x<=x1;x++){const ic=hasCity(x,y),is=hasStation(x,y),il=hasLevelFree(x,y);row.push(grid[y][x]);crow.push(ic?cityIdx(x,y):-1);srow.push(is);lrow.push(il?levelFreeRot(x,y):-1);if(grid[y][x]||ic||is||il)has=true;}
+    g.push(row);cm.push(crow);sm.push(srow);lm.push(lrow);}
+  if(!has){clip=null;return;}
+  clip={ox:x0,oy:y0,g,cm,sm,lm};
+}
+function pasteAt(cell){ if(!clip||!cell)return; record();
+  const c0=cell.c,r0=cell.r;
+  clip.g.forEach((row,y)=>row.forEach((v,x)=>{
+    const absX=ori[0]+(c0+x), absY=ori[1]+(r0+y); growToAbs(absX,absY);
+    const cc=absX-ori[0],rr=absY-ori[1]; const k=absX+','+absY;
+    grid[rr][cc]=v;
+    if(clip.cm[y][x]>=0)cities.set(k,clip.cm[y][x]); else cities.delete(k);
+    if(clip.sm[y][x])stations.add(k); else stations.delete(k);
+    if(clip.lm&&clip.lm[y][x]>=0)levelFree.set(k,clip.lm[y][x]); else levelFree.delete(k);
+  }));
+  render();}
+function deleteSel(){ if(!sel)return; record();
+  const [x0,y0,x1,y1]=sel;
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){grid[y][x]=0;const k=(ori[0]+x)+','+(ori[1]+y);cities.delete(k);stations.delete(k);levelFree.delete(k);}
+  render();updateStatus();}
+
+// ---------------- undo (snapshots) ----------------
+const undo=[],redo=[];let initializing=true;
+function snap(){return JSON.stringify({W,H,ori,grid,cities:[...cities],stations:[...stations],levelFree:[...levelFree]});}
+function record(){if(initializing)return;undo.push(snap());if(undo.length>300)undo.shift();redo.length=0;}
+function apply(s){const d=JSON.parse(s);W=d.W;H=d.H;ori=d.ori;grid=d.grid;cities.clear();(d.cities||[]).forEach(e=>{if(Array.isArray(e))cities.set(e[0],e[1]==null?0:e[1]);else cities.set(e,0);});stations.clear();(d.stations||[]).forEach(k=>stations.add(k));levelFree.clear();(d.levelFree||[]).forEach(e=>{if(Array.isArray(e))levelFree.set(e[0],e[1]==null?0:e[1]);else levelFree.set(e,0);});resizeCanvas();updateStatus();}
+function undoOp(){if(undo.length){redo.push(snap());apply(undo.pop());}}
+function redoOp(){if(redo.length){undo.push(snap());apply(redo.pop());}}
+function clearAll(){record();grid=Array.from({length:H},()=>Array(W).fill(0));cities.clear();stations.clear();levelFree.clear();resizeCanvas();}
+function trim(){ let minx=0,miny=0,maxx=W-1,maxy=H-1,found=false;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(grid[y][x]!==0||hasCity(x,y)||hasStation(x,y)||hasLevelFree(x,y)){
+    if(!found){minx=maxx=x;miny=maxy=y;found=true;}else{minx=Math.min(minx,x);maxx=Math.max(maxx,x);miny=Math.min(miny,y);maxy=Math.max(maxy,y);}}
+  if(!found)return; record();
+  const nw=maxx-minx+1,nh=maxy-miny+1,ng=Array.from({length:nh},(_,y)=>Array.from({length:nw},(_,x)=>grid[y+miny][x+minx]));
+  const shiftKey=k=>{const [X,Y]=k.split(',').map(Number);const c=X-ori[0],r=Y-ori[1];return (c>=minx&&c<=maxx&&r>=miny&&r<=maxy)?((ori[0]+(c-minx))+','+(ori[1]+(r-miny))):null;};
+  const nc=new Map();cities.forEach((v,k)=>{const nk=shiftKey(k);if(nk!=null)nc.set(nk,v);});
+  const ns=new Set();stations.forEach(k=>{const nk=shiftKey(k);if(nk!=null)ns.add(nk);});
+  const nl=new Map();levelFree.forEach((v,k)=>{const nk=shiftKey(k);if(nk!=null)nl.set(nk,v);});
+  grid=ng;W=nw;H=nh;cities.clear();nc.forEach((v,k)=>cities.set(k,v));stations.clear();ns.forEach(k=>stations.add(k));levelFree.clear();nl.forEach((v,k)=>levelFree.set(k,v));ori=[ori[0]+minx,ori[1]+miny];resizeCanvas();
+}
+
+// ---------------- open / new / export ----------------
+document.getElementById('new').onclick=()=>{record();setGrid(20,20);render();updateStatus();};
+document.getElementById('open').onclick=()=>document.getElementById('file').click();
+document.getElementById('file').onchange=e=>{const f=e.target.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{try{
+    const buf=new Uint8Array(rd.result);
+    let i=0;while(i<buf.length&&(buf[i]===9||buf[i]===10||buf[i]===13||buf[i]===32))i++;
+    if(buf[i]===0x7b)loadJson(JSON.parse(new TextDecoder().decode(buf)));  // legacy JSON project
+    else loadMpk(buf);
+  }catch(err){alert('bad file: '+err);}};
+  rd.readAsArrayBuffer(f);e.target.value='';};
+function loadJson(d){ record(); W=d.width||20;H=d.height||20;ori=d.origin||[0,0];grid=d.grid.map(row=>row.slice());
+  cities.clear();(d.cities||[]).forEach(c=>cities.set(c[0]+','+c[1],c[2]==null?0:c[2]));
+  stations.clear();(d.stations||[]).forEach(c=>stations.add(c[0]+','+c[1]));
+  levelFree.clear();(d.level_free||[]).forEach(c=>levelFree.set(c[0]+','+c[1],c[2]==null?0:c[2]));resizeCanvas();updateStatus();}
+function loadMpk(buf){ const d=EnvPkl.parseEnvMpk(buf); if(!d.grid)throw new Error('no grid'); record();
+  grid=d.grid.map(row=>row.slice()); H=grid.length; W=grid[0].length; ori=d.origin||[0,0];
+  cities.clear();(d.cities||[]).forEach(c=>cities.set(c[0]+','+c[1],c[2]==null?0:c[2]));
+  stations.clear();(d.stations||[]).forEach(c=>stations.add(c[0]+','+c[1]));
+  levelFree.clear();(d.level_free||[]).forEach(c=>levelFree.set(c[0]+','+c[1],c[2]==null?0:c[2]));resizeCanvas();updateStatus();}
+function guiMeta(){ const cs=[];cities.forEach((v,k)=>{const [x,y]=k.split(',').map(Number);cs.push([x,y,v]);});
+  const ss=[];stations.forEach(k=>{const [x,y]=k.split(',').map(Number);ss.push([x,y]);});
+  const lf=[];levelFree.forEach((v,k)=>{const [x,y]=k.split(',').map(Number);lf.push([x,y,v]);});
+  return {origin:ori,cities:cs,stations:ss,level_free:lf};}
+function exportMpk(){ const bytes=EnvPkl.buildEnvMpk(grid, 0, guiMeta()); dl(new Blob([bytes]),'network.mpk','application/octet-stream');}
+function dl(data,name,type){const a=document.createElement('a');a.href=URL.createObjectURL(data instanceof Blob?data:new Blob([data],{type}));a.download=name;a.click();}
+
+// ---------------- keys ----------------
+let arrowTimer=null,arrowKeys=new Set();
+function scrollByArrows(){const step=40;
+  if(arrowKeys.has('Left'))wrap.scrollLeft-=step; if(arrowKeys.has('Right'))wrap.scrollLeft+=step;
+  if(arrowKeys.has('Up'))wrap.scrollTop-=step; if(arrowKeys.has('Down'))wrap.scrollTop+=step;}
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  const k=e.key.toLowerCase();
+  if((e.ctrlKey||e.metaKey)&&k==='z'){undoOp();e.preventDefault();return;}
+  if((e.ctrlKey||e.metaKey)&&k==='y'){redoOp();e.preventDefault();return;}
+  if((e.ctrlKey||e.metaKey)&&k==='c'){copySel();e.preventDefault();return;}
+  if((e.ctrlKey||e.metaKey)&&k==='v'){if(hover)pasteAt(hover);e.preventDefault();return;}
+  if(k==='delete'||k==='backspace'){deleteSel();e.preventDefault();return;}
+  if(k==='r'){if(ROT[currentName]){rot=(rot+90)%360;render();updateInspector();}e.preventDefault();}
+  else if(k==='f'){if(ROT[currentName]){current=Bit.flip(current);rot=0;render();updateInspector();}e.preventDefault();}
+  else if(k==='e')setTool('erase');
+  else if(k==='p')setTool('paint');
+  else if(k==='s')setTool('select');
+  else if(k==='m')setTool('move');
+  else if(HOTKEYS[k]){const nm=HOTKEYS[k];if(nm==='diamond_crossing'||nm===LEVELFREENAME){diamondVariant=nm;updateDiamondIcon();}selectTile(nm);}
+  else if(e.key.startsWith('Arrow')){arrowKeys.add(e.key.replace('Arrow',''));
+    if(!arrowTimer)arrowTimer=setInterval(scrollByArrows,16);e.preventDefault();}
+  updateRotationVisible();
+});
+window.addEventListener('keyup',e=>{if(e.key.startsWith('Arrow')){arrowKeys.delete(e.key.replace('Arrow',''));if(!arrowKeys.size&&arrowTimer){clearInterval(arrowTimer);arrowTimer=null;}}});
+window.addEventListener('blur',()=>{arrowKeys.clear();if(arrowTimer){clearInterval(arrowTimer);arrowTimer=null;}});
+
+// ---------------- toolbar wiring ----------------
+document.getElementById('undo').onclick=undoOp;
+document.getElementById('redo').onclick=redoOp;
+document.getElementById('clear').onclick=clearAll;
+document.getElementById('trim').onclick=trim;
+document.getElementById('exmpk').onclick=exportMpk;
+document.getElementById('gw').onchange=e=>setGrid(parseInt(e.target.value)||20,H);
+document.getElementById('gh').onchange=e=>setGrid(W,parseInt(e.target.value)||20);
+
+function updateStatus(){document.getElementById('status').textContent=
+  `Grid ${W}×${H} @(${ori[0]},${ori[1]}) · ${cities.size} cities · ${stations.size} stations · ${levelFree.size} level-free · tool ${tool} · ${currentName}${rot?(' rot '+rot):''}`;
+  updateRotationVisible();
+}
+
+function init(){
+  // start blank (empty 20x20 grid)
+  initializing=false;resizeCanvas();centerView();selectTile('vertical_straight');updateStatus();
+}
+</script>
+</body>
+</html>
