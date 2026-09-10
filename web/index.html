@@ -29,9 +29,9 @@
   #tools{display:flex;gap:4px;padding:6px 10px;background:#eef2ee;border-bottom:1px solid #cfd8cf}
   #canvas-wrap{flex:1;overflow:hidden;position:relative;background:#dfe6df}
   canvas{display:block;position:absolute;top:0;left:0}
-  #inspector{width:230px;flex-shrink:0;padding:8px 10px;background:#f6f8f6;border-left:1px solid #cfd8cf;overflow:auto;font-size:12px;line-height:1.5}
-  #inspector h3{margin:0 0 6px;font-size:12px;color:#4a555e}
-  #status{padding:5px 12px;font-size:12px;color:#4a555e;background:#f4f7f4;border-top:1px solid #cfd8cf}
+  #status{padding:5px 12px;font-size:12px;color:#4a555e;background:#f6f8f6;border-top:1px solid #cfd8cf;white-space:nowrap;overflow-x:auto}
+  #status b{color:#20262b}
+  #status-text::before{content:"  ·  ";color:#9aa7b0}
   #hint{font-size:11px;color:#7c8892}
   #rotbtns{display:flex;gap:4px}
 </style>
@@ -47,7 +47,7 @@
     <input id="file" type="file" accept=".mpk,.json,application/json,application/octet-stream" style="display:none">
     <label>W <input id="gw" type="number" value="20" min="1" max="120"></label>
     <label>H <input id="gh" type="number" value="20" min="1" max="120"></label>
-    <span id="hint">drag draw · 0-9 tiles · 7/▾ diamond (level-free) · L level-free · R rot · F flip · E erase · S select · M pan · wheel/middle-drag pan · Cmd+wheel zoom</span>
+    <span id="hint">drag draw (Shift = straight) · 0-8 tiles · 7/▾ diamond (level-free) · L level-free · R rot · F flip · E erase · S select · M pan · wheel/middle-drag pan · Cmd+wheel zoom</span>
   </header>
   <div id="palette"></div>
   <div id="mid">
@@ -55,9 +55,8 @@
       <div id="tools"></div>
       <div id="canvas-wrap"><canvas id="cv"></canvas></div>
     </div>
-    <div id="inspector"><h3>Inspector</h3><div id="insp-body">select a cell</div></div>
   </div>
-  <div id="status">loading…</div>
+  <div id="status"><span id="insp-body">select a cell</span><span id="status-text"></span></div>
 </div>
 <script src="envpkl.js?v=5"></script>
 <script>
@@ -290,24 +289,21 @@ function openDiamondMenu(anchor){
   diamondMenu=p;
 }
 
-// ---------------- inspector ----------------
-function cellLines(c,r){
+// ---------------- bottom bar (inspector + status) ----------------
+function cellText(c,r){
   const inb=(c>=0&&r>=0&&c<W&&r<H);
   const v=inb?grid[r][c]:0;
-  let h='value '+v+'<br>'+(v?bits(v):'empty');
-  if(inb&&hasStation(c,r))h+='<br><span style="color:#2f6fb3">station</span>';
-  if(inb&&hasLevelFree(c,r))h+='<br><span style="color:#8a5a00">level-free crossing</span>';
+  let h='value '+v+' · '+(v?bits(v):'empty');
+  if(inb&&hasStation(c,r))h+=' · <span style="color:#2f6fb3">station</span>';
+  if(inb&&hasLevelFree(c,r))h+=' · <span style="color:#8a5a00">level-free</span>';
   return h;
 }
 function tileLabel(name){const t=TILES.find(t=>t.name===name);return t?t.label:(LABELS[name]||name);}
 function updateInspector(){
-  let html='';
-  html+='<b>Tile:</b> '+tileLabel(currentName)+'<br>';
-  html+='<b>Value:</b> '+current+(rot?(' rot '+rot):'')+'<br>';
-  if(hover){const X=ori[0]+hover.c,Y=ori[1]+hover.r;html+='<hr><b>Hover ('+X+','+Y+')</b><br>'+cellLines(hover.c,hover.r);}
-  if(selCell){const [X,Y]=selCell;html+='<hr><b>Cell ('+X+','+Y+')</b><br>'+cellLines(X-ori[0],Y-ori[1]);}
-  if(sel){const w=sel[2]-sel[0]+1,h=sel[3]-sel[1]+1;
-    html+='<hr><b>Selection</b> '+w+'×'+h+' ('+(w*h)+' cells)<br><span style="color:#68757f">Ctrl+C copy · Ctrl+V paste · Del clear</span>';}
+  let html='<b>Tile:</b> '+tileLabel(currentName)+' ('+current+(rot?(' rot '+rot):'')+')';
+  if(hover){const X=ori[0]+hover.c,Y=ori[1]+hover.r;html+=' &nbsp;·&nbsp; <b>Hover ('+X+','+Y+')</b> '+cellText(hover.c,hover.r);}
+  if(selCell){const [X,Y]=selCell;html+=' &nbsp;·&nbsp; <b>Cell ('+X+','+Y+')</b> '+cellText(X-ori[0],Y-ori[1]);}
+  if(sel){const w=sel[2]-sel[0]+1,h=sel[3]-sel[1]+1;html+=' &nbsp;·&nbsp; <b>Selection</b> '+w+'×'+h+' ('+(w*h)+' cells)';}
   inspBody.innerHTML=html;
 }
 function bits(v){const s=v.toString(2).padStart(16,'0');return s.slice(0,4)+' '+s.slice(4,8)+' '+s.slice(8,12)+' '+s.slice(12,16);}
@@ -330,7 +326,7 @@ wrap.addEventListener('mousedown',e=>{
   if(tool==='select'){selCell=[ab.X,ab.Y];sel=null;marquee=[ab.X,ab.Y,ab.X,ab.Y];
     drag={mode:'select',start:cell};render();updateInspector();return;}
   if(tool==='move'){panning=true;panStart=[e.clientX,e.clientY];return;}
-  drag={mode:tool,start:cell,startAbs:ab,last:cell};
+  drag={mode:tool,start:cell,startAbs:ab,last:cell,lastAbs:ab};
   if(tool!=='erase'||inAbs(ab.X,ab.Y)){record();placeAbs(ab.X,ab.Y);}   // snapshot BEFORE the change
   render();
 });
@@ -340,7 +336,6 @@ window.addEventListener('mousemove',e=>{
   const inside=pointerInCanvas(e);
   const cell=cellAt(e);
   if(tool==='select'&&drag&&drag.mode==='select'){if(marquee){const ab=absFromCell(cell);marquee[2]=ab.X;marquee[3]=ab.Y;sel=null;}}
-  else if(drag&&(drag.mode==='paint'||drag.mode==='movex')){/* handled below */ }
   if(drag&&(tool==='paint'||tool==='erase')&&inside){   // pause at the edge (no runaway growth)
     if(tool==='erase'){
       // freehand: erase every cell swept (interpolate so fast drags leave no gaps)
@@ -348,13 +343,20 @@ window.addEventListener('mousemove',e=>{
       const dx=Math.abs(b.c-a.c), dy=Math.abs(b.r-a.r), n=Math.max(dx,dy,1);
       for(let i=0;i<=n;i++){const x=Math.round(a.c+(b.c-a.c)*i/n), y=Math.round(a.r+(b.r-a.r)*i/n);const X=ori[0]+x,Y=ori[1]+y;if(inAbs(X,Y))placeAbs(X,Y);}
       drag.last=cell;
-    } else {
+    } else if(e.shiftKey){
+      // Shift: axis-aligned straight segment from the drag start
       const ab=absFromCell(cell); growToAbs(ab.X,ab.Y);
-      // straight segment from drag start (absolute -> local, so growth can't shift it)
       const a=drag.startAbs?cellFromAbs(drag.startAbs.X,drag.startAbs.Y):drag.start, abx=cellFromAbs(ab.X,ab.Y);
       const end=Math.max(0,Math.min(W-1,abx.c)), endr=Math.max(0,Math.min(H-1,abx.r));
       if(Math.abs(end-a.c)>=Math.abs(endr-a.r)){const s=end>=a.c?1:-1;for(let x=a.c;x!==end+s;x+=s)placeAbs(ori[0]+x,ori[1]+a.r);}
       else {const s=endr>=a.r?1:-1;for(let y=a.r;y!==endr+s;y+=s)placeAbs(ori[0]+a.c,ori[1]+y);}
+      drag.lastAbs=ab;
+    } else {
+      // freehand: trace every cell the cursor passes (absolute coords -> growth-safe)
+      const a=drag.lastAbs||drag.startAbs, b=absFromCell(cell);
+      const dx=b.X-a.X, dy=b.Y-a.Y, n=Math.max(Math.abs(dx),Math.abs(dy),1);
+      for(let i=0;i<=n;i++)placeAbs(Math.round(a.X+dx*i/n),Math.round(a.Y+dy*i/n));
+      drag.lastAbs=b;
     }
     render();
   }
@@ -493,8 +495,8 @@ document.getElementById('exmpk').onclick=exportMpk;
 document.getElementById('gw').onchange=e=>{record();setGrid(parseInt(e.target.value)||20,H);};
 document.getElementById('gh').onchange=e=>{record();setGrid(W,parseInt(e.target.value)||20);};
 
-function updateStatus(){document.getElementById('status').textContent=
-  `Grid ${W}×${H} @(${ori[0]},${ori[1]}) · ${stations.size} stations · ${levelFree.size} level-free · tool ${tool} · ${tileLabel(currentName)}${rot?(' rot '+rot):''}`;
+function updateStatus(){document.getElementById('status-text').textContent=
+  `Grid ${W}×${H} @(${ori[0]},${ori[1]}) · ${stations.size} stations · ${levelFree.size} level-free · tool ${tool}`;
   updateRotationVisible();
 }
 

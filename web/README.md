@@ -26,11 +26,11 @@ python -m http.server 8080     # then open http://localhost:8080
 
 ## Features
 
-- Paint (drag = straight line), **freehand erase** (drag clears every cell swept), **select (drag a marquee)** + **Copy / Paste / Delete** (S, Ctrl+C, Ctrl+V, Del) to duplicate or clear a block.
+- Paint **freehand** (drag follows the cursor; hold **Shift** for a straight line), **freehand erase** (drag clears every cell swept), **select (drag a marquee)** + **Copy / Paste / Delete** (S, Ctrl+C, Ctrl+V, Del) to duplicate or clear a block.
 - Tiles: **0** station, **1-8** rail (straight, turn, switch, sym-switch, single/double slip, diamond, dead-end); **R** rotate, **F** flip, **E** erase, **P** paint.
 - **Move/pan** tool (M) + **middle-drag** pan + smooth **arrow-key** panning.
 - **Sprite-ghost** hover preview of the tile you're about to place.
-- **Inspector** panel shows the **hovered** cell and the selected cell (value + 16-bit bits + markers).
+- **Bottom bar** shows the tile/status and the **hovered** cell + selected cell (value + 16-bit bits + markers).
 - **Auto-grow in all directions** (content preserved), **Trim to content**, W/H size (resets the grid).
 - **Open/Load** a saved `.mpk` (legacy JSON still accepted), **New** blank, **Undo/Redo**.
 - **Station markers**: **Station (`0`)** is a marker placed **on top of a cell** —

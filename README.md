@@ -66,7 +66,7 @@ environment in Python (mean difference ≈ 4/255, checked by `tools/verify_look.
 | **Stations** | Markers drawn on top of the track. |
 | **True-to-Flatland rendering** | The same **PILSVG** sprites and placement logic Flatland itself uses. |
 | **Infinite canvas** | Pan without bounds and grow in any direction as you draw; **Trim to content** to crop back. |
-| **Editing tools** | Select / copy / paste / delete, undo/redo, and drag-to-draw straight segments. |
+| **Editing tools** | Freehand paint, **Shift**+drag for a straight line, select / copy / paste / delete, and undo/redo. |
 | **Native export** | Flatland's MessagePack `.mpk`, loadable with `RailEnvPersister`. |
 
 ## Screenshots
@@ -97,10 +97,10 @@ uv sync --all-extras
 ## Usage
 
 The editor is organised around a **toolbar** (paint, erase, select, move), a
-**tile bar** of native PILSVG icons, and an **inspector** that reports the
-hovered and selected cell (value, 16-bit bits, markers).
+**tile bar** of native PILSVG icons, and a **bottom bar** that reports the
+hovered and selected cell (value, 16-bit bits, markers) plus the grid status.
 
-- **Drag** with paint to draw a straight line between press and release; **erase** is freehand (clears every cell swept).
+- **Drag** with paint to draw freehand (the brush follows the cursor); hold **Shift** to lock to a straight line. **Erase** is freehand too (clears every cell swept).
 - **Auto-expand:** drawing just off the grid grows it in any direction.
 - Pan with the wheel, middle-drag, the **Move** tool (`M`) or arrow keys; `Cmd`/`Ctrl` + scroll zooms around the cursor.
 - Drag a **marquee** with the select tool, then `Ctrl+C` / `Ctrl+V` / `Del` (paste lands on the cell under the pointer).
@@ -130,7 +130,6 @@ hovered and selected cell (value, 16-bit bits, markers).
 | <kbd>6</kbd> | Double slip |
 | <kbd>7</kbd> | Diamond |
 | <kbd>8</kbd> | Dead-end |
-| <kbd>9</kbd> | City |
 | <kbd>L</kbd> | Level-free diamond |
 
 **Editing**
@@ -152,9 +151,9 @@ hovered and selected cell (value, 16-bit bits, markers).
 | Wheel / middle-drag | Pan |
 | <kbd>Cmd</kbd>/<kbd>Ctrl</kbd>+wheel | Zoom around the cursor |
 | Arrow keys | Pan |
-| <kbd>Esc</kbd> | Close the city/diamond menus |
+| <kbd>Esc</kbd> | Close the diamond menu |
 
-<sub>¹ <kbd>R</kbd> and <kbd>F</kbd> apply only to rotatable rail tiles, not to City, Station, or Empty.</sub>
+<sub>¹ <kbd>R</kbd> and <kbd>F</kbd> apply only to rotatable rail tiles, not to Station or Empty.</sub>
 
 ## Export
 
@@ -175,9 +174,9 @@ env.reset()
 Editor-only state that Flatland does not model (canvas origin, station
 markers, level-free crossings) rides along under an extra top-level
 `railenv_editor` key. `RailEnvPersister.set_full_state` reads only known keys,
-so the same file stays a stock, loadable `RailEnv`:
+so the same file stays a stock, loadable `RailEnv` (pseudo-structure):
 
-```python
+```text
 { ...Flatland env_dict...,
   "railenv_editor": { "version": 1, "origin": [x, y],
                       "stations": [[ax, ay], ...],
