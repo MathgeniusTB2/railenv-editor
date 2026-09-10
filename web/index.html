@@ -88,7 +88,7 @@ const HOTKEYS = {0:"station",1:"vertical_straight",2:"right_turn_from_south",3:"
   4:"symmetric_switch_from_south",5:"single_slip_SW",6:"double_slip_NW_SE",7:"diamond_crossing",8:"dead_end_from_south",9:"city",l:"level_free_diamond"};
 const CITYNAME="city", STATIONNAME="station", EMPTYNAME="empty", LEVELFREENAME="level_free_diamond";
 
-// bit math (mirror of railenv_editor.core.transitions). N=0,E=1,S=2,W=3.
+// bit math (mirror of railtiles.py). N=0,E=1,S=2,W=3.
 const BLOCK=[12,8,4,0];
 const Bit = {
   exit(v,inc){const o=[];for(let d=0;d<4;d++)if(v&(1<<(BLOCK[inc]+(3-d))))o.push(d);return o;},

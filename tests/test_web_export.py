@@ -2,8 +2,7 @@
 
 Runs the Node generator, then loads the native msgpack (.mpk) output (and the
 legacy pickle) through Flatland's ``RailEnvPersister``, checks the grid
-round-trips exactly, and exercises the dependency-free reader on both the
-web-written and the desktop-written files.
+round-trips exactly, and exercises the dependency-free reader.
 """
 
 from __future__ import annotations
@@ -15,11 +14,10 @@ from pathlib import Path
 
 import pytest
 
-from railenv_editor.core import transitions as T
+import railtiles as T
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = ROOT / "tools" / "make_every_tile_map.js"
-PARSER = ROOT / "tools" / "parse_mpk.js"
 
 ALL_TILES = {v for v in T.VALUE_TO_NAME if v != 0}
 
@@ -103,40 +101,3 @@ def test_web_mpk_roundtrips_editor_state(tmp_path: Path):
     assert sorted(got["cities"]) == sorted(expected["cities"])
     assert sorted(got["stations"]) == sorted(expected["stations"])
     assert sorted(got["level_free"]) == sorted(expected["level_free"])
-
-
-def test_mpk_cross_tool_interop(flatland_available, tmp_path: Path):
-    """Web-written .mpk opens on the desktop, and desktop-written .mpk opens on the web."""
-    if not flatland_available:
-        pytest.skip("flatland not available")
-    if shutil.which("node") is None:
-        pytest.skip("node not available")
-
-    import numpy as np
-
-    from railenv_editor.core.grid_model import GridModel
-    from railenv_editor.editor import export as ex
-
-    # web -> desktop
-    _generate(tmp_path)
-    expected = json.loads((tmp_path / "every_tile.json").read_text())
-    m = ex.from_msgpack_env(tmp_path / "every_tile.mpk")
-    assert m.cells.tolist() == expected["grid"]
-    assert m.origin == tuple(expected["origin"])
-    assert m.cities == {(c[0], c[1]) for c in expected["cities"]}
-
-    # desktop -> web (dependency-free reader in Node)
-    m2 = GridModel(width=expected["width"], height=expected["height"])
-    m2.cells = np.asarray(expected["grid"], dtype=np.uint16)
-    m2.origin = tuple(expected["origin"])
-    m2.cities = {(c[0], c[1]) for c in expected["cities"]}
-    p = tmp_path / "desktop.mpk"
-    ex.to_msgpack_env(m2, p)
-
-    out = subprocess.run(["node", str(PARSER), str(p)], cwd=ROOT, check=True,
-                         capture_output=True, text=True)
-    got = json.loads(out.stdout)
-    assert got["grid"] == expected["grid"]
-    assert got["origin"] == expected["origin"]
-    # the desktop has no per-city building sprite, so only positions round-trip
-    assert sorted((c[0], c[1]) for c in got["cities"]) == sorted((c[0], c[1]) for c in expected["cities"])

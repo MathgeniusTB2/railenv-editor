@@ -12,7 +12,7 @@ Serve the folder (GitHub Pages also works — no build, no backend):
 python -m http.server 8080     # then open http://localhost:8080
 ```
 
-## Features (at parity with the desktop app)
+## Features
 
 - Paint (drag = straight line), **freehand erase** (drag clears every cell swept), **select (drag a marquee)** + **Copy / Paste / Delete** (S, Ctrl+C, Ctrl+V, Del) to duplicate or clear a block.
 - Tiles: **0** station, **1-8** rail (straight, turn, switch, sym-switch, single/double slip, diamond, dead-end), **9** city; **R** rotate, **F** flip, **E** erase, **P** paint.
@@ -90,8 +90,8 @@ node tools/make_every_tile_map.js web/testmaps   # writes every_tile.{json,mpk,r
 ```
 
 `tests/test_web_export.py` runs this end-to-end and asserts the `.mpk` loads in
-Flatland (every cell a valid transition), round-trips grid + markers through the
-dependency-free reader, and interops with the desktop app both ways.
+Flatland (every cell a valid transition) and round-trips grid + markers through the
+dependency-free reader.
 
 ## Assets
 

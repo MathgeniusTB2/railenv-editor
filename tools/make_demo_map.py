@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from railenv_editor.core import transitions as T
+import railtiles as T
 
 OUT = Path(__file__).resolve().parents[1] / "web" / "testmaps" / "demo.json"
 
@@ -112,7 +112,7 @@ map_obj = {
     "height": H,
     "origin": [0, 0],
     "grid": grid,
-    "cities": [[4, 2, 3], [18, 2, 7], [4, 11, 11], [18, 11, 15]],
+    "cities": [[4, 4, 3], [18, 4, 7], [4, 9, 11], [18, 9, 15]],   # inside the loops, off the track
     "stations": [[11, 4], [11, 10]],
     "level_free": [[11, 6, 0]],
 }

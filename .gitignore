@@ -6,7 +6,6 @@ __pycache__/
 build/
 dist/
 spec/
-!packaging/railenv_editor.spec
 
 # Virtual environments
 .venv/

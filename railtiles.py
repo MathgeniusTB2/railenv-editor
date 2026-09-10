@@ -1,9 +1,9 @@
-"""Flatland rail transition-map definitions used by the editor.
+"""Flatland rail transition-map catalogue shared by the web editor's tooling.
 
-The editor stores each grid cell as a raw 16-bit bitmap (the value Flatland
-reads directly from ``GridTransitionMap.grid``). This module provides the
-tile palette (base cell types + clockwise rotations) and helpers to decode a
-cell back into a human-readable name.
+Each grid cell is a raw 16-bit bitmap (the value Flatland reads directly from
+``GridTransitionMap.grid``). This module provides the tile palette (base cell
+types + clockwise rotations) and helpers to decode a cell back into a
+human-readable name. It mirrors the bit math in ``web/index.html``.
 
 All values are taken directly from ``flatland.envs.grid.rail_env_grid`` so the
 generated grids are guaranteed valid for ``RailEnv``. No Flatland import is

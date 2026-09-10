@@ -1,8 +1,8 @@
-"""Verify the transcribed placement + exported sprites reproduce flatland's pilsvg.
+"""Verify the web renderer reproduces Flatland's PILSVG look.
 
 Renders a sample grid two ways and reports the pixel difference:
-  1. real = flatland's PilsvgRenderer output
-  2. repro = PIL draw using web/assets sprites + the transcribed set_rail_at logic
+  1. real  = Flatland's ``RenderTool(gl="PILSVG")`` output
+  2. repro = PIL draw using ``web/assets`` sprites + the transcribed ``set_rail_at`` logic
 """
 from __future__ import annotations
 
@@ -13,14 +13,15 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from railenv_editor.editor.canvas import PilsvgRenderer
-
 ROOT = Path(__file__).resolve().parents[1]
 
+SCALE = 40
+REPRO_CELL = 30
 
-def sample(N):
-    g = np.zeros((N, N), dtype=np.uint16)
-    for x in range(N):
+
+def sample(n: int) -> np.ndarray:
+    g = np.zeros((n, n), dtype=np.uint16)
+    for x in range(n):
         g[5, x] = 1025
     for y in range(2, 5):
         g[y, 5] = 32800
@@ -31,26 +32,66 @@ def sample(N):
     return g
 
 
-def repro(g, cities):
+def flatland_render(cells: np.ndarray) -> np.ndarray:
+    """Flatland's own PILSVG render as a uint8 RGBA array (no Qt objects)."""
+    from flatland.envs.grid.rail_env_grid import RailEnvTransitions
+    from flatland.envs.line_generators import Line
+    from flatland.envs.rail_env import RailEnv
+    from flatland.envs.rail_generators import rail_from_grid_transition_map
+    from flatland.envs.rail_grid_transition_map import RailGridTransitionMap
+    from flatland.utils.rendertools import RenderTool
+
+    g = np.asarray(cells, dtype=np.uint16)
+    rows, cols = g.shape
+    rm = RailGridTransitionMap(width=cols, height=rows, transitions=RailEnvTransitions(), grid=g)
+
+    def line_gen(rail, num_agents, hints, num_resets, np_random):
+        return Line(agent_waypoints={}, agent_speeds=[])
+
+    def timetable(agents, distance_map, hints, np_random):
+        class T:
+            pass
+
+        t = T()
+        t.max_episode_steps = 1
+        t.earliest_departures = []
+        t.latest_arrivals = []
+        return t
+
+    env = RailEnv(
+        width=cols,
+        height=rows,
+        rail_generator=rail_from_grid_transition_map(rm),
+        line_generator=line_gen,
+        timetable_generator=timetable,
+        number_of_agents=0,
+    )
+    rt = RenderTool(env, gl="PILSVG", screen_width=cols * SCALE, screen_height=rows * SCALE)
+    env.reset()
+    arr = rt.render_env(show=False, show_agents=False, show_observations=False, return_image=True)
+    rt.close_window()
+    return np.asarray(arr)
+
+
+def repro(g: np.ndarray, cities: set[tuple[int, int]]) -> Image.Image:
     m = json.load(open(ROOT / "web/assets/manifest.json"))
-    cell = 30
-    W = g.shape[1]
-    H = g.shape[0]
-    img = Image.new("RGBA", (W * cell, H * cell), (233, 238, 233, 255))
+    cell = REPRO_CELL
+    w, h = g.shape[1], g.shape[0]
+    img = Image.new("RGBA", (w * cell, h * cell), (233, 238, 233, 255))
     rail = {int(k): Image.open(ROOT / "web/assets" / v).convert("RGBA") for k, v in m["rail"].items()}
     scenery = [Image.open(ROOT / "web/assets" / v).convert("RGBA") for v in m["scenery"]]
     sc2 = [Image.open(ROOT / "web/assets" / v).convert("RGBA") for v in m["scenery_d2"]]
     water = [Image.open(ROOT / "web/assets" / v).convert("RGBA") for v in m["scenery_water"]]
     buildings = [Image.open(ROOT / "web/assets" / v).convert("RGBA") for v in m["buildings"]]
     station = Image.open(ROOT / "web/assets" / "station.png").convert("RGBA")
-    bg = math.ceil(math.sqrt(W * W + H * H))
+    bg = math.ceil(math.sqrt(w * w + h * h))
 
-    def put(im, c, r):
+    def put(im: Image.Image, c: int, r: int) -> None:
         im = im.resize((cell, cell))
         img.paste(im, (c * cell, r * cell), im)
 
-    for r in range(H):
-        for c in range(W):
+    for r in range(h):
+        for c in range(w):
             v = int(g[r, c])
             pt = None
             if v == 0:
@@ -87,26 +128,24 @@ def repro(g, cities):
     return img
 
 
-cities = {(6, 7)}
-N = 16
-grid = sample(N)
-real = PilsvgRenderer(40).render(grid, cities)
-# real is QImage
-from PySide6.QtCore import QBuffer  # noqa
+def main() -> None:
+    cities = {(6, 7)}
+    n = 16
+    grid = sample(n)
 
-def qimg_to_png(qimg):
-    arr = np.array(qimg.constBits()).reshape(qimg.height(), qimg.width(), 4)
-    return Image.fromarray(arr).convert("RGBA")
+    real = Image.fromarray(flatland_render(grid)).convert("RGBA")
+    real = real.resize((n * REPRO_CELL, n * REPRO_CELL))
+    repro_pil = repro(grid, cities)
 
-real_pil = qimg_to_png(real[0].copy())
-real_pil.save("/tmp/real.png")
-repro_pil = repro(grid, cities)
-repro_pil.save("/tmp/repro.png")
-# compare: resize real to repro cell coords (real cell = real[1])
-cellr = real[1]
-real_resized = real_pil.resize((N * 30, N * 30))
-a = np.asarray(real_resized.convert("RGB"), dtype=int)
-b = np.asarray(repro_pil.convert("RGB"), dtype=int)
-mae = np.abs(a - b).mean()
-print("saved /tmp/real.png /tmp/repro.png")
-print("real cell px:", cellr, "| mean abs pixel diff (vector vs pilsvg):", round(float(mae), 2))
+    real.save("/tmp/real.png")
+    repro_pil.save("/tmp/repro.png")
+
+    a = np.asarray(real.convert("RGB"), dtype=int)
+    b = np.asarray(repro_pil.convert("RGB"), dtype=int)
+    mae = np.abs(a - b).mean()
+    print("saved /tmp/real.png /tmp/repro.png")
+    print("mean abs pixel diff (vector vs pilsvg):", round(float(mae), 2))
+
+
+if __name__ == "__main__":
+    main()

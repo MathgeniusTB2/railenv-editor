@@ -2,14 +2,14 @@
 
 # RailEnv Editor
 
-**A visual editor for [Flatland](https://github.com/flatland-association/flatland-rl) railway environments (`RailEnv`).**
+**A dependency-free web editor for [Flatland](https://github.com/flatland-association/flatland-rl) railway environments (`RailEnv`).**
 
-Paint a rail grid, place cities and stations, get live connectivity feedback, and export a
-loadable Flatland environment — from a desktop app or entirely in the browser.
+Paint a rail grid, place cities and stations, and export a loadable Flatland environment —
+entirely in the browser, with no build step and no libraries.
 
 [![CI](https://github.com/MathgeniusTB2/railenv-editor/actions/workflows/ci.yml/badge.svg)](https://github.com/MathgeniusTB2/railenv-editor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
+[![No build step](https://img.shields.io/badge/build-none%20%E2%80%94%20static%20files-brightgreen.svg)](web/)
 [![Flatland](https://img.shields.io/badge/flatland--rl-4.x-orange.svg)](https://github.com/flatland-association/flatland-rl)
 [![Live demo](https://img.shields.io/badge/live%20demo-GitHub%20Pages-2f6fb3.svg)](https://mathgeniustb2.github.io/railenv-editor/)
 
@@ -34,54 +34,49 @@ loadable Flatland environment — from a desktop app or entirely in the browser.
 
 ## Features
 
-- **Two front ends, one file format.** A cross-platform **PySide6 desktop app** and a
-  **dependency-free web editor** (no build step, no libraries) that open and save the same files.
+- **Zero dependencies, zero build.** A single static page (`web/`) — no framework, no bundler,
+  no backend. Serve the folder or drop it on any static host.
 - **Paint a network** with every valid Flatland tile: straights, turns, simple/symmetric
   switches, single/double slips, dead-end, and the **diamond crossing** (plus a level-free,
   over/under variant).
 - **Cities and stations** as markers on top of the track, with selectable city buildings.
-- **Live validation** against Flatland's real transition maps.
 - **True-to-Flatland rendering** — the same **PILSVG** sprites and placement logic Flatland uses.
-- **Infinite canvas** that grows in any direction as you draw; **Trim to content** to crop back.
+- **Infinite canvas** that pans without bounds and grows in any direction as you draw;
+  **Trim to content** to crop back.
 - **Select / copy / paste / delete**, undo/redo, and drag-to-draw straight segments.
 - **Single export**: Flatland's native MessagePack `.mpk`, loadable with `RailEnvPersister`.
 
 ## Screenshots
 
-| Desktop / web editor | Every valid tile |
+| Web editor | Every valid tile |
 | :--: | :--: |
 | <img src="docs/hero.png" alt="Editor with a demo network" width="440"> | <img src="docs/every-tile.png" alt="Every Flatland tile" width="150"> |
 
 ## Quick start
 
-The desktop app uses [uv](https://docs.astral.sh/uv/):
-
-```bash
-uv sync --all-extras                          # create .venv + install everything (incl. flatland)
-uv run python -m railenv_editor.app.main      # launch the desktop editor
-```
-
-If you only need the editor (no Flatland validation / `.mpk` export), `uv sync` is enough.
-
-**Web editor:** open the [live demo](https://mathgeniustb2.github.io/railenv-editor/), or serve
-the folder locally:
+Open the [live demo](https://mathgeniustb2.github.io/railenv-editor/), or serve the folder locally:
 
 ```bash
 python -m http.server 8080 --directory web    # then open http://localhost:8080
+```
+
+That's it — the app is pure HTML/CSS/JS and needs no install. To run the validation
+tests/tooling you'll need Python and [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv sync --all-extras
 ```
 
 ## Usage
 
 **Tools:** `P` paint · `E` erase · `S` select · `M` move/pan · `V` paste · `R` rotate · `F` flip.
 
-**Tiles** are shown in a bar (native PILSVG icons) and can be picked by click or hotkey. The web
-editor uses `0` station, `1`–`8` rail, `9` city, `L` level-free diamond. The desktop bar order is:
-straight, right turn, left switch, right switch, symmetric switch, dead-end, single slip, double
-slip, diamond, city, empty.
+**Tiles** are shown in a bar (native PILSVG icons) and can be picked by click or hotkey:
+`0` station, `1`–`8` rail, `9` city, `L` level-free diamond.
 
 - **Drag** with paint/erase to draw a straight line between press and release.
-- **Auto-expand:** dragging past an edge grows the grid in any direction.
-- Middle-mouse drag pans; the mouse wheel zooms (`Cmd`/`Ctrl` + scroll in the browser).
+- **Auto-expand:** drawing just off the grid grows it in any direction.
+- Pan with the wheel, middle-drag, the **Move** tool (`M`) or arrow keys; `Cmd`/`Ctrl` + scroll zooms.
 - Drag a **marquee** with the select tool, then `Ctrl+C` / `Ctrl+V` / `Del`.
 
 ## Export
@@ -100,41 +95,30 @@ env, env_dict = RailEnvPersister.load_new("network.mpk")
 env.reset()
 ```
 
-The legacy pickle exporter is still available as
-`railenv_editor.editor.export.to_pickled_env`.
-
 ## Project layout
 
 ```
-railenv_editor/        desktop app (PySide6)
-  core/                grid model + Flatland transition catalogue
-  editor/              canvas, palette, inspector, .mpk export/import
-  app/                 window wiring and entrypoint
-web/                   dependency-free web editor (no build step)
+web/                   the editor (dependency-free, no build step)
+  index.html           the app
   envpkl.js            dependency-free pickle + msgpack reader/writer
+  assets/              Flatland PILSVG sprites + manifest
   testmaps/            demo and every-tile maps
-tools/                 sprite export, test-map generators, screenshots
-tests/                 pytest suite
-packaging/             PyInstaller spec
+railtiles.py           shared Flatland tile catalogue (used by tests/tools)
+tools/                 sprite export, test-map generators, screenshots, look-parity check
+tests/                 pytest suite validating the exports against flatland-rl
+docs/                  README screenshots
 ```
 
 ## Development
 
 ```bash
 uv sync --all-extras
-uv run pytest tests/ -q                 # tests
+uv run pytest tests/ -q                 # validate the browser exports against flatland-rl
 uv run ruff check .                     # lint
-uv run --all-extras python tools/screenshot_web.py   # regenerate docs/ screenshots
+uv run --all-extras python tools/screenshot_web.py    # regenerate docs/ screenshots
 ```
 
-Build desktop binaries with PyInstaller:
-
-```bash
-uv add --dev pyinstaller
-uv run pyinstaller packaging/railenv_editor.spec
-```
-
-GitHub Actions runs CI on every push/PR and builds macOS `.app` / Windows `.exe` on version tags.
+CI runs lint + tests on every push/PR, and the web app is deployed to GitHub Pages from `main`.
 
 ## License
 
