@@ -19,11 +19,10 @@ def main(path: str) -> int:
 
     # now restore it into a live RailEnv to be sure it's usable
     from flatland.envs.grid.rail_env_grid import RailEnvTransitions
+    from flatland.envs.observations import GlobalObsForRailEnv
+    from flatland.envs.persistence import RailEnvPersister as P
     from flatland.envs.rail_env import RailEnv
     from flatland.envs.rail_generators import RailFromGridGen, RailGridTransitionMap
-    from flatland.envs.observations import GlobalObsForRailEnv
-
-    from flatland.envs.persistence import RailEnvPersister as P
 
     rm = RailGridTransitionMap(width=grid.shape[1], height=grid.shape[0], transitions=RailEnvTransitions())
     rm.grid = grid
@@ -35,7 +34,10 @@ def main(path: str) -> int:
     def tt(a, dm, h, nr):
         class T:
             pass
-        t = T(); t.max_episode_steps = 500; t.earliest_departures = []; t.latest_arrivals = []
+        t = T()
+        t.max_episode_steps = 500
+        t.earliest_departures = []
+        t.latest_arrivals = []
         return t
 
     env = RailEnv(width=grid.shape[1], height=grid.shape[0], number_of_agents=0,

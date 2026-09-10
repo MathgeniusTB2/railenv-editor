@@ -32,18 +32,14 @@ def sample(N):
 
 
 def repro(g, cities):
-    from PIL import ImageDraw
-
     m = json.load(open(ROOT / "web/assets/manifest.json"))
     cell = 30
     W = g.shape[1]
     H = g.shape[0]
     img = Image.new("RGBA", (W * cell, H * cell), (233, 238, 233, 255))
-    d = ImageDraw.Draw(img)
     rail = {int(k): Image.open(ROOT / "web/assets" / v).convert("RGBA") for k, v in m["rail"].items()}
     scenery = [Image.open(ROOT / "web/assets" / v).convert("RGBA") for v in m["scenery"]]
     sc2 = [Image.open(ROOT / "web/assets" / v).convert("RGBA") for v in m["scenery_d2"]]
-    sc3 = [Image.open(ROOT / "web/assets" / v).convert("RGBA") for v in m["scenery_d3"]]
     water = [Image.open(ROOT / "web/assets" / v).convert("RGBA") for v in m["scenery_water"]]
     buildings = [Image.open(ROOT / "web/assets" / v).convert("RGBA") for v in m["buildings"]]
     station = Image.open(ROOT / "web/assets" / "station.png").convert("RGBA")
@@ -97,7 +93,6 @@ grid = sample(N)
 real = PilsvgRenderer(40).render(grid, cities)
 # real is QImage
 from PySide6.QtCore import QBuffer  # noqa
-import io
 
 def qimg_to_png(qimg):
     arr = np.array(qimg.constBits()).reshape(qimg.height(), qimg.width(), 4)
