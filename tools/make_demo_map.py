@@ -3,7 +3,7 @@
 Writes ``web/testmaps/demo.json`` (the editor's JSON map format). The layout is a
 multi-loop network: an outer ring, two horizontal spines, a vertical spine, three
 connectors, a diamond crossing (marked level-free), a single slip, a double slip,
-dead-end spurs, and city/station markers.
+dead-end spurs, and station markers.
 
 Edges are added symmetrically (``link`` adds both directions) and the result is
 validated for reciprocity + Flatland validity, so every track connects and every
@@ -112,7 +112,6 @@ map_obj = {
     "height": H,
     "origin": [0, 0],
     "grid": grid,
-    "cities": [[4, 4, 3], [18, 4, 7], [4, 9, 11], [18, 9, 15]],   # inside the loops, off the track
     "stations": [[11, 4], [11, 10]],
     "level_free": [[11, 6, 0]],
 }

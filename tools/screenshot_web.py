@@ -61,6 +61,7 @@ def main() -> None:
             _fit_view(page)
             page.wait_for_timeout(300)
             page.locator("#wrap").screenshot(path=str(DOCS / "hero.png"))
+            _downscale(DOCS / "hero.png", max_width=1640)
 
             # every-tile detail: the raw canvas (all 29 transitions), trimmed
             page.set_input_files("#file", str(WEB / "testmaps" / "every_tile.json"))
@@ -73,6 +74,19 @@ def main() -> None:
         httpd.shutdown()
     print("wrote", DOCS / "hero.png")
     print("wrote", DOCS / "every-tile.png")
+
+
+def _downscale(path: Path, max_width: int) -> None:
+    """Shrink an oversized screenshot to a sane README width and re-encode it."""
+    from PIL import Image
+
+    img = Image.open(path)
+    if img.width > max_width:
+        height = round(img.height * max_width / img.width)
+        img = img.resize((max_width, height), Image.LANCZOS)
+    img.convert("RGB").quantize(colors=256, method=Image.MEDIANCUT, dither=Image.FLOYDSTEINBERG).save(
+        path, optimize=True
+    )
 
 
 def _trim(path: Path, pad: int = 8) -> None:

@@ -1,6 +1,6 @@
 """Export Flatland's PILSVG sprites + manifest so a browser can reproduce the look.
 
-Run once:  .venv/bin/python tools/export_pilsvg.py
+Run once:  uv run --all-extras python tools/export_pilsvg.py
 Writes PNGs + manifest.json into web/assets/.
 """
 from __future__ import annotations

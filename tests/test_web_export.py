@@ -88,7 +88,7 @@ def test_every_tile_mpk_loads_as_railenv(flatland_available, tmp_path: Path):
 
 
 def test_web_mpk_roundtrips_editor_state(tmp_path: Path):
-    """The browser .mpk writer/reader round-trips grid + city/station/level-free markers."""
+    """The browser .mpk writer/reader round-trips grid + station/level-free markers."""
     if shutil.which("node") is None:
         pytest.skip("node not available")
 
@@ -98,6 +98,5 @@ def test_web_mpk_roundtrips_editor_state(tmp_path: Path):
 
     assert got["grid"] == expected["grid"]
     assert got["origin"] == expected["origin"]
-    assert sorted(got["cities"]) == sorted(expected["cities"])
     assert sorted(got["stations"]) == sorted(expected["stations"])
     assert sorted(got["level_free"]) == sorted(expected["level_free"])

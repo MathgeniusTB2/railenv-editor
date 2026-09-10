@@ -125,10 +125,9 @@
   // Flatland's native msgpack env dict, matching msgpack_numpy's ndarray encoding
   // ({b'nd':True, b'type':'<u2', b'kind':b'', b'shape':(rows,cols), b'data':bytes}).
   // `meta` (optional) carries editor-only state under a top-level "railenv_editor"
-  // key: {origin:[x,y], cities:[[x,y,buildingIdx],...], stations:[[x,y],...],
-  //       level_free:[[x,y],...]}. The absolute level-free cells are also written
-  // to Flatland's standard "level_free_positions" (local [row,col]) so the
-  // level-free behaviour is honoured on load.
+  // key: {origin:[x,y], stations:[[x,y],...], level_free:[[x,y],...]}. The absolute
+  // level-free cells are also written to Flatland's standard "level_free_positions"
+  // (local [row,col]) so the level-free behaviour is honoured on load.
   function buildEnvMpk(grid, seed, meta) {
     var rows = grid.length, cols = grid[0].length;
     var origin = (meta && meta.origin) ? meta.origin : [0, 0];
@@ -153,15 +152,10 @@
     parts.push(mpStr("level_free_positions"), mpArr(lfLocal.length));
     for (var li = 0; li < lfLocal.length; li++) parts.push(mpArr(2), mpInt(lfLocal[li][0]), mpInt(lfLocal[li][1]));
     if (meta) {
-      var cities = meta.cities || [];
       var stations = meta.stations || [];
-      parts.push(mpStr("railenv_editor"), mpMap(5));
+      parts.push(mpStr("railenv_editor"), mpMap(4));
       parts.push(mpStr("version"), mpInt(1));
       parts.push(mpStr("origin"), mpArr(2), mpInt(origin[0] | 0), mpInt(origin[1] | 0));
-      parts.push(mpStr("cities"), mpArr(cities.length));
-      for (var ci = 0; ci < cities.length; ci++) {
-        parts.push(mpArr(3), mpInt(cities[ci][0] | 0), mpInt(cities[ci][1] | 0), mpInt((cities[ci][2] | 0) || 0));
-      }
       parts.push(mpStr("stations"), mpArr(stations.length));
       for (var si = 0; si < stations.length; si++) {
         parts.push(mpArr(2), mpInt(stations[si][0] | 0), mpInt(stations[si][1] | 0));
@@ -195,7 +189,7 @@
     return out;
   }
 
-  // Parse a Flatland/editor .mpk back to {grid, origin, cities, stations, seed}.
+  // Parse a Flatland/editor .mpk back to {grid, origin, stations, seed}.
   function parseEnvMpk(input) {
     var buf = (input instanceof Uint8Array) ? input : new Uint8Array(input);
     var pos = 0;
@@ -267,7 +261,6 @@
     return {
       grid: ndarrayToGrid(root.grid),
       origin: origin,
-      cities: (meta.cities || []).map(function (c) { return [Number(c[0]), Number(c[1]), Number(c[2] == null ? 0 : c[2])]; }),
       stations: (meta.stations || []).map(function (c) { return [Number(c[0]), Number(c[1])]; }),
       level_free: levelFree,
       seed: root.random_seed == null ? 0 : Number(root.random_seed),

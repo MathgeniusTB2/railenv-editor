@@ -1,8 +1,20 @@
-# RailEnv Editor (web)
+<div align="center">
 
-A dependency-free, static web editor for Flatland rail environments that
-reproduces the **exact PILSVG look** (flatland's real track + terrain sprites and
-its deterministic placement logic), and can export a **Flatland-loadable env**.
+# RailEnv Editor — web
+
+**The dependency-free, static editor for Flatland rail environments.**
+
+Reproduces Flatland's **PILSVG look** (Flatland's real track + terrain sprites and
+its deterministic placement logic, ≈4/255 mean difference) and exports a
+**Flatland-loadable env**.
+
+[![No build step](https://img.shields.io/badge/build-none%20%E2%80%94%20static%20files-brightgreen.svg)](.)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
+
+</div>
+
+> Part of the [RailEnv Editor](../README.md) project. See the root README for the
+> full overview, screenshots, and development workflow.
 
 ## Run
 
@@ -15,20 +27,16 @@ python -m http.server 8080     # then open http://localhost:8080
 ## Features
 
 - Paint (drag = straight line), **freehand erase** (drag clears every cell swept), **select (drag a marquee)** + **Copy / Paste / Delete** (S, Ctrl+C, Ctrl+V, Del) to duplicate or clear a block.
-- Tiles: **0** station, **1-8** rail (straight, turn, switch, sym-switch, single/double slip, diamond, dead-end), **9** city; **R** rotate, **F** flip, **E** erase, **P** paint.
+- Tiles: **0** station, **1-8** rail (straight, turn, switch, sym-switch, single/double slip, diamond, dead-end); **R** rotate, **F** flip, **E** erase, **P** paint.
 - **Move/pan** tool (M) + **middle-drag** pan + smooth **arrow-key** panning.
 - **Sprite-ghost** hover preview of the tile you're about to place.
 - **Inspector** panel shows the **hovered** cell and the selected cell (value + 16-bit bits + markers).
-- **Auto-grow in all directions** (content preserved), **Trim to content**, W/H resize.
-- **Open/Load** a saved JSON, **New** blank, **Undo/Redo**.
-- **Markers**: **City (`9`)** and **Station (`0`)** are separate markers placed
-  **on top of a cell** — they keep the rail and render over the track (like
-  Flatland). Rail can be drawn on a marker cell; **Empty/Erase** clears rail +
-  markers.
-- **City building submenu**: the **▾** on the City tile opens a thumbnail grid of
-  all building sprites; pick one and the City tool places **that** building. Each
-  city remembers its own building (changing the pick only affects new
-  placements). Copy/paste, undo, trim and load all preserve it.
+- **Auto-grow in all directions** (content preserved), **Trim to content**, W/H size (resets the grid).
+- **Open/Load** a saved `.mpk` (legacy JSON still accepted), **New** blank, **Undo/Redo**.
+- **Station markers**: **Station (`0`)** is a marker placed **on top of a cell** —
+  it keeps the rail and renders over the track (like Flatland). Rail can be drawn
+  on a station cell; **Empty/Erase** clears rail + markers. Copy/paste, undo, trim
+  and load all preserve it.
 - **Level-free diamond crossings** (over-/underpasses): the **▾** on the Diamond
   tile opens a dropdown — **Diamond** or **Level-free** (`L`). A level-free cell
   is a diamond crossing that two trains may share (one horizontal, one vertical);
@@ -49,7 +57,7 @@ A single format for everything: **`.mpk`** (Flatland's native MessagePack env
 dict). The same file is what `RailEnvPersister.save(env, "*.mpk")` writes and
 `RailEnvPersister.load_env_dict("network.mpk")` reads via `msgpack.unpackb`, so
 Flatland/Python can load it directly. The editor can also **Open** its own
-`.mpk` back (grid + city/station markers + canvas origin).
+`.mpk` back (grid + station markers + canvas origin).
 
 Editor-only state that Flatland does not model is stored under an extra
 top-level `railenv_editor` key:
@@ -57,7 +65,6 @@ top-level `railenv_editor` key:
 ```
 { ...Flatland env_dict...,
   "railenv_editor": { "version": 1, "origin": [x,y],
-                      "cities": [[ax,ay,buildingIdx], ...],
                       "stations": [[ax,ay], ...],
                       "level_free": [[ax,ay], ...] } }
 ```
@@ -80,9 +87,10 @@ old-Flatland consumers.
 ## Test map
 
 `web/testmaps/every_tile.json` and `web/testmaps/every_tile.mpk` contain **every
-valid Flatland tile (all 29 transitions)** plus an empty cell, city/station
+valid Flatland tile (all 29 transitions)** plus an empty cell, station
 markers and **level-free crossings**; open either with **Open**.
-Regenerate them (plus a reader round-trip dump) with:
+Regenerate them (plus a reader round-trip dump) — run these from the repository
+root:
 
 ```bash
 node tools/make_every_tile_map.js web/testmaps   # writes every_tile.{json,mpk,roundtrip.json}
@@ -95,12 +103,13 @@ dependency-free reader.
 
 ## Assets
 
-Sprites are flatland's real PILSVG art, exported by:
+Sprites are Flatland's real PILSVG art, exported by (run from the repository
+root):
 
 ```bash
-../.venv/bin/python ../tools/export_pilsvg.py   # regenerates web/assets/*
+.venv/bin/python tools/export_pilsvg.py   # regenerates web/assets/*
 ```
 
-Verify: `tools/verify_look.py` confirms the renderer matches flatland (~4/255 diff);
+Verify: `tools/verify_look.py` confirms the renderer matches Flatland (~4/255 diff);
 `tools/verify_pkl.py` confirms a browser-generated `.pkl` loads in Flatland
-(`node tools/make_test_pkl.js /tmp/test.pkl && ..python ../tools/verify_pkl.py /tmp/test.pkl`).
+(`node tools/make_test_pkl.js /tmp/test.pkl && .venv/bin/python tools/verify_pkl.py /tmp/test.pkl`).

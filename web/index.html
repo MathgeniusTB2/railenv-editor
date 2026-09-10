@@ -20,12 +20,8 @@
   .tile .k{font-size:11px;color:#68757f}
   .caret{position:absolute;top:1px;right:2px;font-size:10px;line-height:1;color:#4a555e;background:#fff;border:1px solid #cdd6cd;border-radius:3px;padding:0 2px;cursor:pointer}
   .caret:hover{background:#eef2ee;border-color:#2f6fb3;color:#2f6fb3}
-  .citymenu{position:fixed;z-index:100;background:#fff;border:1px solid #b9c6b9;border-radius:8px;box-shadow:0 6px 20px #0003;padding:6px}
-  .cmtitle{font-size:11px;color:#4a555e;margin:0 0 4px 2px}
-  .cmgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;max-height:260px;overflow:auto}
-  .cmgrid img{width:36px;height:36px;image-rendering:pixelated;border:1px solid #dde4dd;border-radius:4px;cursor:pointer;background:#f4f7f4}
-  .cmgrid img:hover{border-color:#2f6fb3}
-  .cmgrid img.sel{border-color:#2f6fb3;box-shadow:0 0 0 2px #2f6fb333}
+  .popmenu{position:fixed;z-index:100;background:#fff;border:1px solid #b9c6b9;border-radius:8px;box-shadow:0 6px 20px #0003;padding:6px}
+  .menutitle{font-size:11px;color:#4a555e;margin:0 0 4px 2px}
   .dmitem{display:flex;gap:7px;align-items:center;padding:3px 6px 3px 3px;border-radius:5px;cursor:pointer;font-size:12px;white-space:nowrap}
   .dmitem:hover{background:#eef2ee}
   .dmitem.sel{background:#e8f0fa;box-shadow:inset 0 0 0 1px #2f6fb355}
@@ -76,7 +72,6 @@ const TILES = [
   {name:"double_slip_NW_SE", value:52275, label:"Double slip", rot:true},
   {name:"diamond_crossing", value:33825, label:"Diamond", rot:true},
   {name:"dead_end_from_south", value:8192, label:"Dead-end", rot:true},
-  {name:"city", value:0, label:"City", rot:false},
   {name:"station", value:0, label:"Station", rot:false},
   {name:"empty", value:0, label:"Empty", rot:false},
 ];
@@ -85,8 +80,8 @@ const ROT = Object.fromEntries(TILES.map(t=>[t.name,t.rot]));
 VALUE.level_free_diamond=33825; ROT.level_free_diamond=true;    // Diamond tile dropdown variant
 const LABELS={diamond_crossing:"Diamond", level_free_diamond:"Level-free diamond"};
 const HOTKEYS = {0:"station",1:"vertical_straight",2:"right_turn_from_south",3:"simple_switch_north_left",
-  4:"symmetric_switch_from_south",5:"single_slip_SW",6:"double_slip_NW_SE",7:"diamond_crossing",8:"dead_end_from_south",9:"city",l:"level_free_diamond"};
-const CITYNAME="city", STATIONNAME="station", EMPTYNAME="empty", LEVELFREENAME="level_free_diamond";
+  4:"symmetric_switch_from_south",5:"single_slip_SW",6:"double_slip_NW_SE",7:"diamond_crossing",8:"dead_end_from_south",l:"level_free_diamond"};
+const STATIONNAME="station", EMPTYNAME="empty", LEVELFREENAME="level_free_diamond";
 
 // bit math (mirror of railtiles.py). N=0,E=1,S=2,W=3.
 const BLOCK=[12,8,4,0];
@@ -102,10 +97,8 @@ const Bit = {
 // ---------------- state (origin-based absolute grid) ----------------
 let W=20,H=20, ori=[0,0];
 let grid=Array.from({length:H},()=>Array(W).fill(0));
-const cities=new Map();                 // city markers: absolute "ax,ay" -> building index
 const stations=new Set();               // station markers, absolute "ax,ay"
 const levelFree=new Map();             // level-free diamond cells: absolute "ax,ay" -> rotation degrees
-let currentCity=3;                      // selected city building (index into manifest.buildings)
 let diamondVariant="diamond_crossing";  // Diamond tile dropdown: normal or level-free
 let current=VALUE.vertical_straight, currentName="vertical_straight", rot=0;
 let tool="paint", sel=null, marquee=null, clip=null, drag=null;
@@ -125,7 +118,6 @@ fetch('assets/manifest.json').then(r=>r.json()).then(m=>{
   for(const [mm,f] of Object.entries(m.rail))add('assets/'+f,'r'+mm);
   m.scenery.forEach((f,i)=>add('assets/'+f,'s'+i));
   m.scenery_d2.forEach((f,i)=>add('assets/'+f,'d2_'+i));
-  m.scenery_d3.forEach((f,i)=>add('assets/'+f,'d3_'+i));
   m.scenery_water.forEach((f,i)=>add('assets/'+f,'w'+i));
   m.buildings.forEach((f,i)=>add('assets/'+f,'b'+i));
   if(m.station)add('assets/'+m.station,'stat');
@@ -134,8 +126,6 @@ fetch('assets/manifest.json').then(r=>r.json()).then(m=>{
 
 // ---------------- rendering (faithful port of graphics_pil set_rail_at) ----------------
 function bgFor(w,h){return Math.ceil(Math.sqrt(w*w+h*h));}
-function hasCity(c,r){return cities.has((ori[0]+c)+','+(ori[1]+r));}
-function cityIdx(c,r){const v=cities.get((ori[0]+c)+','+(ori[1]+r));return v==null?0:v;}
 function hasStation(c,r){return stations.has((ori[0]+c)+','+(ori[1]+r));}
 function hasLevelFree(c,r){return levelFree.has((ori[0]+c)+','+(ori[1]+r));}
 function levelFreeRot(c,r){const v=levelFree.get((ori[0]+c)+','+(ori[1]+r));return v==null?0:v;}
@@ -173,13 +163,12 @@ function render(){
     const key=spriteFor(c,r);
     if(key&&key==='s'+(manifest.scenery.length-1)){
       const X=ori[0]+c,Y=ori[1]+r,a=bgSeed-4,a2=a+(X+Y+X*Y+X**3+Y**4);
-      if(a2%11>3&&X>1&&Y%7===1&&grid[r][c-1]===0){drawSprite('d2_0',c-1,r);drawSprite('d2_1',c,r);}
+      if(a2%11>3&&c>1&&Y%7===1&&grid[r][c-1]===0){drawSprite('d2_0',c-1,r);drawSprite('d2_1',c,r);}
       else drawSprite(key,c,r);
     } else if(key)drawSprite(key,c,r);
   }
-  // pass 2: markers on top (like flatland's target layer) — cities and stations
+  // pass 2: markers on top (like flatland's target layer) — stations
   for(let r=r0;r<r1;r++)for(let c=c0;c<c1;c++){
-    if(hasCity(c,r)){drawSprite('b'+(cityIdx(c,r)%manifest.buildings.length),c,r);}
     if(hasStation(c,r)) drawSprite('stat',c,r);
   }
   // selection + marquee + ghost overlays (world coords)
@@ -189,7 +178,6 @@ function render(){
   if(hover && tool!=="select"){
     const hx=hover.c*CELL, hy=hover.r*CELL; let im=null;
     if(tool==="erase"){ctx.fillStyle='rgba(239,83,80,.35)';ctx.fillRect(hx,hy,CELL,CELL);}
-    else if(currentName===CITYNAME)im=images['b'+(currentCity%manifest.buildings.length)];
     else if(currentName===STATIONNAME)im=images['stat'];
     else if(currentName===EMPTYNAME){ctx.fillStyle='rgba(255,255,255,.55)';ctx.fillRect(hx,hy,CELL,CELL);}
     else if(currentName===LEVELFREENAME){drawRotated('r666',hover.c,hover.r,rot,.6);}
@@ -197,14 +185,14 @@ function render(){
       const v=rot?Bit.rotate(current,rot):current; im=images['r'+v];
       if(im){ctx.globalAlpha=.6;ctx.drawImage(im,hx,hy,CELL,CELL);ctx.globalAlpha=1;}
     }
-    if(im&&(currentName===CITYNAME||currentName===STATIONNAME)){ctx.globalAlpha=.7;ctx.drawImage(im,hx,hy,CELL,CELL);ctx.globalAlpha=1;}
+    if(im&&currentName===STATIONNAME){ctx.globalAlpha=.7;ctx.drawImage(im,hx,hy,CELL,CELL);ctx.globalAlpha=1;}
   }
   ctx.setTransform(1,0,0,1,0,0);
 }
 let hover=null, lastHoverKey=null;
 function resizeCanvas(){cv.width=Math.max(1,wrap.clientWidth);cv.height=Math.max(1,wrap.clientHeight);render();}
 function centerView(){pan.x=(wrap.clientWidth-W*CELL*zoom)/2;pan.y=(wrap.clientHeight-H*CELL*zoom)/2;render();}
-function setGrid(w,h){if(!w||!h)return;W=w;H=h;bgSeed=bgFor(W,H);grid=Array.from({length:H},()=>Array(W).fill(0));cities.clear();stations.clear();levelFree.clear();ori=[0,0];resizeCanvas();updateStatus();}
+function setGrid(w,h){if(!w||!h)return;W=w;H=h;bgSeed=bgFor(W,H);grid=Array.from({length:H},()=>Array(W).fill(0));stations.clear();levelFree.clear();ori=[0,0];resizeCanvas();centerView();updateStatus();}
 
 // ---------------- growth (all directions, content preserved) ----------------
 function inAbs(X,Y){return X>=ori[0]&&X<ori[0]+W&&Y>=ori[1]&&Y<ori[1]+H;}
@@ -221,33 +209,28 @@ function placeAbs(X,Y){
   if(!inAbs(X,Y))growToAbs(X,Y);
   const c=X-ori[0],r=Y-ori[1]; if(c<0||r<0||c>=W||r>=H)return;
   const k=X+','+Y;
-  if(tool==="erase"){grid[r][c]=0;cities.delete(k);stations.delete(k);levelFree.delete(k);}   // clear rail + markers
-  else if(currentName===CITYNAME){cities.set(k,currentCity);}            // city marker (keep rail)
+  if(tool==="erase"){grid[r][c]=0;stations.delete(k);levelFree.delete(k);}   // clear rail + markers
   else if(currentName===STATIONNAME){stations.add(k);}                   // station marker (keep rail)
-  else if(currentName===EMPTYNAME){grid[r][c]=0;cities.delete(k);stations.delete(k);levelFree.delete(k);}
+  else if(currentName===EMPTYNAME){grid[r][c]=0;stations.delete(k);levelFree.delete(k);}
   else if(currentName===LEVELFREENAME){grid[r][c]=33825;levelFree.set(k,rot);}   // level-free diamond (keep markers)
   else {const v=rot?Bit.rotate(current,rot):current;grid[r][c]=v;levelFree.delete(k);}  // rail: auto-clear level-free
 }
 
 // ---------------- palette + tools + rotation ----------------
 const pal=document.getElementById('palette'), toolsEl=document.getElementById('tools');
-let cityTileImg=null, diamondTileImg=null;
+let diamondTileImg=null;
 function updateDiamondIcon(){if(diamondTileImg)diamondTileImg.src='assets/'+manifest.rail[diamondVariant===LEVELFREENAME?'666':'33825'];}
 function buildUI(){
   TILES.forEach(t=>{
     const el=document.createElement('div');el.className='tile';el.dataset.name=t.name;
     const img=document.createElement('img');
-    img.src = t.name===CITYNAME ? ('assets/'+manifest.buildings[currentCity])
-            : t.name===STATIONNAME ? ('assets/'+manifest.station)
+    img.src = t.name===STATIONNAME ? ('assets/'+manifest.station)
             : t.name===EMPTYNAME ? ('assets/'+manifest.rail['0'])
             : ('assets/'+manifest.rail[String(t.value)]);
     el.appendChild(img);
     const k=document.createElement('div');k.className='k';
     k.textContent=(Object.entries(HOTKEYS).find(e=>e[1]===t.name)?.[0]??'');
     el.appendChild(k);el.onclick=()=>selectTile(t.name);pal.appendChild(el);
-    if(t.name===CITYNAME){cityTileImg=img;
-      const caret=document.createElement('div');caret.className='caret';caret.textContent='▾';caret.title='Choose city building';
-      caret.onclick=(e)=>{e.stopPropagation();toggleCityMenu(el);};el.appendChild(caret);}
     if(t.name==="diamond_crossing"){diamondTileImg=img;
       const caret=document.createElement('div');caret.className='caret';caret.textContent='▾';caret.title='Diamond options (normal / level-free)';
       caret.onclick=(e)=>{e.stopPropagation();toggleDiamondMenu(el);};el.appendChild(caret);
@@ -278,42 +261,21 @@ function setTool(t){tool=t;document.querySelectorAll('#tools button[data-tool]')
 function updateRotationVisible(){document.getElementById('rotbtns').style.display=(tool!=='select'&&tool!=='move'&&ROT[currentName])?'':'none';
   document.querySelectorAll('#rotbtns button').forEach(b=>b.classList.toggle('active',+b.dataset.rot===rot));}
 
-// ---------------- city-building submenu ----------------
-let cityMenu=null;
-function closeCityMenu(){if(cityMenu){cityMenu.remove();cityMenu=null;}}
-function toggleCityMenu(anchor){if(cityMenu){closeCityMenu();return;}openCityMenu(anchor);}
-function openCityMenu(anchor){
-  const p=document.createElement('div');p.className='citymenu';
-  const title=document.createElement('div');title.className='cmtitle';title.textContent='City building';
-  p.appendChild(title);
-  const g=document.createElement('div');g.className='cmgrid';
-  manifest.buildings.forEach((f,i)=>{
-    const b=document.createElement('img');b.src='assets/'+f;b.title='Building #'+i;
-    if(i===currentCity)b.className='sel';
-    b.onclick=()=>{currentCity=i;if(cityTileImg)cityTileImg.src='assets/'+manifest.buildings[i];selectTile(CITYNAME);closeCityMenu();};
-    g.appendChild(b);
-  });
-  p.appendChild(g);document.body.appendChild(p);
-  const r=anchor.getBoundingClientRect();
-  p.style.left=Math.max(4,Math.min(r.left,window.innerWidth-p.offsetWidth-8))+'px';
-  p.style.top=Math.min(r.bottom+4,window.innerHeight-p.offsetHeight-8)+'px';
-  cityMenu=p;
-}
+// ---------------- popup menus ----------------
 document.addEventListener('mousedown',e=>{
   const onCaret=e.target.classList&&e.target.classList.contains('caret');
   if(onCaret)return;
-  if(cityMenu&&!cityMenu.contains(e.target))closeCityMenu();
   if(diamondMenu&&!diamondMenu.contains(e.target))closeDiamondMenu();
 });
-window.addEventListener('keydown',e=>{if(e.key==='Escape'){closeCityMenu();closeDiamondMenu();}});
+window.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDiamondMenu();}});
 
 // ---------------- diamond submenu (normal / level-free) ----------------
 let diamondMenu=null;
 function closeDiamondMenu(){if(diamondMenu){diamondMenu.remove();diamondMenu=null;}}
 function toggleDiamondMenu(anchor){if(diamondMenu){closeDiamondMenu();return;}openDiamondMenu(anchor);}
 function openDiamondMenu(anchor){
-  const p=document.createElement('div');p.className='citymenu';
-  const title=document.createElement('div');title.className='cmtitle';title.textContent='Diamond crossing';p.appendChild(title);
+  const p=document.createElement('div');p.className='popmenu';
+  const title=document.createElement('div');title.className='menutitle';title.textContent='Diamond crossing';p.appendChild(title);
   [["diamond_crossing","Diamond","33825"],["level_free_diamond","Level-free (over/under)","666"]].forEach(([name,label,key])=>{
     const it=document.createElement('div');it.className='dmitem'+(diamondVariant===name?' sel':'');
     const im=document.createElement('img');im.src='assets/'+manifest.rail[key];it.appendChild(im);
@@ -333,14 +295,14 @@ function cellLines(c,r){
   const inb=(c>=0&&r>=0&&c<W&&r<H);
   const v=inb?grid[r][c]:0;
   let h='value '+v+'<br>'+(v?bits(v):'empty');
-  if(inb&&hasCity(c,r))h+='<br><span style="color:#a33">city</span> #'+cityIdx(c,r);
   if(inb&&hasStation(c,r))h+='<br><span style="color:#2f6fb3">station</span>';
   if(inb&&hasLevelFree(c,r))h+='<br><span style="color:#8a5a00">level-free crossing</span>';
   return h;
 }
+function tileLabel(name){const t=TILES.find(t=>t.name===name);return t?t.label:(LABELS[name]||name);}
 function updateInspector(){
   let html='';
-  const t=TILES.find(t=>t.name===currentName);html+='<b>Tile:</b> '+(t?t.label:(LABELS[currentName]||currentName))+'<br>';
+  html+='<b>Tile:</b> '+tileLabel(currentName)+'<br>';
   html+='<b>Value:</b> '+current+(rot?(' rot '+rot):'')+'<br>';
   if(hover){const X=ori[0]+hover.c,Y=ori[1]+hover.r;html+='<hr><b>Hover ('+X+','+Y+')</b><br>'+cellLines(hover.c,hover.r);}
   if(selCell){const [X,Y]=selCell;html+='<hr><b>Cell ('+X+','+Y+')</b><br>'+cellLines(X-ori[0],Y-ori[1]);}
@@ -365,17 +327,19 @@ wrap.addEventListener('mousedown',e=>{
   if(e.button===1){panning=true;panStart=[e.clientX,e.clientY];e.preventDefault();return;}
   if(e.button!==0)return;
   const cell=cellAt(e),ab=absFromCell(cell);
-  if(tool==='select'){selCell=[ab.X,ab.Y];sel=null;marquee=[cell.c,cell.r,cell.c,cell.r];
+  if(tool==='select'){selCell=[ab.X,ab.Y];sel=null;marquee=[ab.X,ab.Y,ab.X,ab.Y];
     drag={mode:'select',start:cell};render();updateInspector();return;}
   if(tool==='move'){panning=true;panStart=[e.clientX,e.clientY];return;}
-  drag={mode:tool,start:cell,startAbs:ab,last:cell};if(tool!=='erase'||inAbs(ab.X,ab.Y))placeAbs(ab.X,ab.Y);render();
+  drag={mode:tool,start:cell,startAbs:ab,last:cell};
+  if(tool!=='erase'||inAbs(ab.X,ab.Y)){record();placeAbs(ab.X,ab.Y);}   // snapshot BEFORE the change
+  render();
 });
 window.addEventListener('mousemove',e=>{
   if(panning){const d=[e.clientX-panStart[0],e.clientY-panStart[1]];panStart=[e.clientX,e.clientY];
     pan.x+=d[0];pan.y+=d[1];render();return;}
   const inside=pointerInCanvas(e);
   const cell=cellAt(e);
-  if(tool==='select'&&drag&&drag.mode==='select'){if(marquee){marquee[2]=cell.c;marquee[3]=cell.r;sel=null;}}
+  if(tool==='select'&&drag&&drag.mode==='select'){if(marquee){const ab=absFromCell(cell);marquee[2]=ab.X;marquee[3]=ab.Y;sel=null;}}
   else if(drag&&(drag.mode==='paint'||drag.mode==='movex')){/* handled below */ }
   if(drag&&(tool==='paint'||tool==='erase')&&inside){   // pause at the edge (no runaway growth)
     if(tool==='erase'){
@@ -403,11 +367,10 @@ window.addEventListener('mouseup',e=>{
   if(panning){panning=false;return;}
   if(!drag)return;
   if(tool==='select'&&drag.mode==='select'){
-    const x0=Math.max(0,Math.min(marquee[0],marquee[2])),x1=Math.min(W-1,Math.max(marquee[0],marquee[2]));
-    const y0=Math.max(0,Math.min(marquee[1],marquee[3])),y1=Math.min(H-1,Math.max(marquee[1],marquee[3]));
+    const x0=Math.max(ori[0],Math.min(marquee[0],marquee[2])),x1=Math.min(ori[0]+W-1,Math.max(marquee[0],marquee[2]));
+    const y0=Math.max(ori[1],Math.min(marquee[1],marquee[3])),y1=Math.min(ori[1]+H-1,Math.max(marquee[1],marquee[3]));
     sel=(x1>=x0&&y1>=y0)?[x0,y0,x1,y1]:null; marquee=null; updateInspector();
   }
-  if(tool==='paint'||tool==='erase'){record();}
   drag=null;render();
 });
 cv.addEventListener('mouseleave',()=>{if(hover){hover=null;lastHoverKey=null;updateInspector();render();}});
@@ -423,47 +386,47 @@ cv.addEventListener('wheel',e=>{e.preventDefault();
 
 // ---------------- copy / paste ----------------
 function copySel(){
-  if(!sel)return; const [x0,y0,x1,y1]=sel, g=[], cm=[], sm=[], lm=[]; let has=false;
-  for(let y=y0;y<=y1;y++){const row=[],crow=[],srow=[],lrow=[];
-    for(let x=x0;x<=x1;x++){const ic=hasCity(x,y),is=hasStation(x,y),il=hasLevelFree(x,y);row.push(grid[y][x]);crow.push(ic?cityIdx(x,y):-1);srow.push(is);lrow.push(il?levelFreeRot(x,y):-1);if(grid[y][x]||ic||is||il)has=true;}
-    g.push(row);cm.push(crow);sm.push(srow);lm.push(lrow);}
+  if(!sel)return; const [ax0,ay0,ax1,ay1]=sel, g=[], sm=[], lm=[]; let has=false;
+  const x0=ax0-ori[0],y0=ay0-ori[1],x1=ax1-ori[0],y1=ay1-ori[1];   // absolute selection -> local indices
+  for(let y=y0;y<=y1;y++){const row=[],srow=[],lrow=[];
+    for(let x=x0;x<=x1;x++){const is=hasStation(x,y),il=hasLevelFree(x,y);row.push(grid[y][x]);srow.push(is);lrow.push(il?levelFreeRot(x,y):-1);if(grid[y][x]||is||il)has=true;}
+    g.push(row);sm.push(srow);lm.push(lrow);}
   if(!has){clip=null;return;}
-  clip={ox:x0,oy:y0,g,cm,sm,lm};
+  clip={ox:ax0,oy:ay0,g,sm,lm};
 }
 function pasteAt(cell){ if(!clip||!cell)return; record();
-  const c0=cell.c,r0=cell.r;
+  const c0=cell.c,r0=cell.r,o0=[ori[0],ori[1]];   // snapshot origin: growToAbs mutates it
   clip.g.forEach((row,y)=>row.forEach((v,x)=>{
-    const absX=ori[0]+(c0+x), absY=ori[1]+(r0+y); growToAbs(absX,absY);
+    const absX=o0[0]+(c0+x), absY=o0[1]+(r0+y); growToAbs(absX,absY);
     const cc=absX-ori[0],rr=absY-ori[1]; const k=absX+','+absY;
     grid[rr][cc]=v;
-    if(clip.cm[y][x]>=0)cities.set(k,clip.cm[y][x]); else cities.delete(k);
     if(clip.sm[y][x])stations.add(k); else stations.delete(k);
     if(clip.lm&&clip.lm[y][x]>=0)levelFree.set(k,clip.lm[y][x]); else levelFree.delete(k);
   }));
   render();}
 function deleteSel(){ if(!sel)return; record();
-  const [x0,y0,x1,y1]=sel;
-  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){grid[y][x]=0;const k=(ori[0]+x)+','+(ori[1]+y);cities.delete(k);stations.delete(k);levelFree.delete(k);}
+  const [ax0,ay0,ax1,ay1]=sel;
+  const x0=ax0-ori[0],y0=ay0-ori[1],x1=ax1-ori[0],y1=ay1-ori[1];   // absolute selection -> local indices
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){grid[y][x]=0;const k=(ori[0]+x)+','+(ori[1]+y);stations.delete(k);levelFree.delete(k);}
   render();updateStatus();}
 
 // ---------------- undo (snapshots) ----------------
 const undo=[],redo=[];let initializing=true;
-function snap(){return JSON.stringify({W,H,ori,grid,bgSeed,cities:[...cities],stations:[...stations],levelFree:[...levelFree]});}
+function snap(){return JSON.stringify({W,H,ori,grid,bgSeed,stations:[...stations],levelFree:[...levelFree]});}
 function record(){if(initializing)return;undo.push(snap());if(undo.length>300)undo.shift();redo.length=0;}
-function apply(s){const d=JSON.parse(s);W=d.W;H=d.H;ori=d.ori;grid=d.grid;bgSeed=d.bgSeed==null?bgFor(W,H):d.bgSeed;cities.clear();(d.cities||[]).forEach(e=>{if(Array.isArray(e))cities.set(e[0],e[1]==null?0:e[1]);else cities.set(e,0);});stations.clear();(d.stations||[]).forEach(k=>stations.add(k));levelFree.clear();(d.levelFree||[]).forEach(e=>{if(Array.isArray(e))levelFree.set(e[0],e[1]==null?0:e[1]);else levelFree.set(e,0);});resizeCanvas();updateStatus();}
+function apply(s){const d=JSON.parse(s);W=d.W;H=d.H;ori=d.ori;grid=d.grid;bgSeed=d.bgSeed==null?bgFor(W,H):d.bgSeed;stations.clear();(d.stations||[]).forEach(k=>stations.add(k));levelFree.clear();(d.levelFree||[]).forEach(e=>{if(Array.isArray(e))levelFree.set(e[0],e[1]==null?0:e[1]);else levelFree.set(e,0);});resizeCanvas();updateStatus();}
 function undoOp(){if(undo.length){redo.push(snap());apply(undo.pop());}}
 function redoOp(){if(redo.length){undo.push(snap());apply(redo.pop());}}
-function clearAll(){record();grid=Array.from({length:H},()=>Array(W).fill(0));cities.clear();stations.clear();levelFree.clear();resizeCanvas();}
+function clearAll(){record();grid=Array.from({length:H},()=>Array(W).fill(0));stations.clear();levelFree.clear();resizeCanvas();}
 function trim(){ let minx=0,miny=0,maxx=W-1,maxy=H-1,found=false;
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(grid[y][x]!==0||hasCity(x,y)||hasStation(x,y)||hasLevelFree(x,y)){
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(grid[y][x]!==0||hasStation(x,y)||hasLevelFree(x,y)){
     if(!found){minx=maxx=x;miny=maxy=y;found=true;}else{minx=Math.min(minx,x);maxx=Math.max(maxx,x);miny=Math.min(miny,y);maxy=Math.max(maxy,y);}}
   if(!found)return; record();
   const nw=maxx-minx+1,nh=maxy-miny+1,ng=Array.from({length:nh},(_,y)=>Array.from({length:nw},(_,x)=>grid[y+miny][x+minx]));
   const shiftKey=k=>{const [X,Y]=k.split(',').map(Number);const c=X-ori[0],r=Y-ori[1];return (c>=minx&&c<=maxx&&r>=miny&&r<=maxy)?((ori[0]+(c-minx))+','+(ori[1]+(r-miny))):null;};
-  const nc=new Map();cities.forEach((v,k)=>{const nk=shiftKey(k);if(nk!=null)nc.set(nk,v);});
   const ns=new Set();stations.forEach(k=>{const nk=shiftKey(k);if(nk!=null)ns.add(nk);});
   const nl=new Map();levelFree.forEach((v,k)=>{const nk=shiftKey(k);if(nk!=null)nl.set(nk,v);});
-  grid=ng;W=nw;H=nh;cities.clear();nc.forEach((v,k)=>cities.set(k,v));stations.clear();ns.forEach(k=>stations.add(k));levelFree.clear();nl.forEach((v,k)=>levelFree.set(k,v));ori=[ori[0]+minx,ori[1]+miny];resizeCanvas();
+  grid=ng;W=nw;H=nh;stations.clear();ns.forEach(k=>stations.add(k));levelFree.clear();nl.forEach((v,k)=>levelFree.set(k,v));ori=[ori[0]+minx,ori[1]+miny];resizeCanvas();
 }
 
 // ---------------- open / new / export ----------------
@@ -479,20 +442,17 @@ document.getElementById('file').onchange=e=>{const f=e.target.files[0];if(!f)ret
   }catch(err){alert('bad file: '+err);}};
   rd.readAsArrayBuffer(f);e.target.value='';};
 function loadJson(d){ record(); W=d.width||20;H=d.height||20;ori=d.origin||[0,0];bgSeed=bgFor(W,H);grid=d.grid.map(row=>row.slice());
-  cities.clear();(d.cities||[]).forEach(c=>cities.set(c[0]+','+c[1],c[2]==null?0:c[2]));
   stations.clear();(d.stations||[]).forEach(c=>stations.add(c[0]+','+c[1]));
   levelFree.clear();(d.level_free||[]).forEach(c=>levelFree.set(c[0]+','+c[1],c[2]==null?0:c[2]));resizeCanvas();centerView();updateStatus();}
 function loadMpk(buf){ const d=EnvPkl.parseEnvMpk(buf); if(!d.grid)throw new Error('no grid'); record();
   grid=d.grid.map(row=>row.slice()); H=grid.length; W=grid[0].length; ori=d.origin||[0,0]; bgSeed=bgFor(W,H);
-  cities.clear();(d.cities||[]).forEach(c=>cities.set(c[0]+','+c[1],c[2]==null?0:c[2]));
   stations.clear();(d.stations||[]).forEach(c=>stations.add(c[0]+','+c[1]));
   levelFree.clear();(d.level_free||[]).forEach(c=>levelFree.set(c[0]+','+c[1],c[2]==null?0:c[2]));resizeCanvas();centerView();updateStatus();}
-function guiMeta(){ const cs=[];cities.forEach((v,k)=>{const [x,y]=k.split(',').map(Number);cs.push([x,y,v]);});
-  const ss=[];stations.forEach(k=>{const [x,y]=k.split(',').map(Number);ss.push([x,y]);});
+function guiMeta(){ const ss=[];stations.forEach(k=>{const [x,y]=k.split(',').map(Number);ss.push([x,y]);});
   const lf=[];levelFree.forEach((v,k)=>{const [x,y]=k.split(',').map(Number);lf.push([x,y,v]);});
-  return {origin:ori,cities:cs,stations:ss,level_free:lf};}
+  return {origin:ori,stations:ss,level_free:lf};}
 function exportMpk(){ const bytes=EnvPkl.buildEnvMpk(grid, 0, guiMeta()); dl(new Blob([bytes]),'network.mpk','application/octet-stream');}
-function dl(data,name,type){const a=document.createElement('a');a.href=URL.createObjectURL(data instanceof Blob?data:new Blob([data],{type}));a.download=name;a.click();}
+function dl(data,name,type){const a=document.createElement('a');a.href=URL.createObjectURL(data instanceof Blob?data:new Blob([data],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 
 // ---------------- keys ----------------
 let arrowTimer=null,arrowKeys=new Set();
@@ -530,11 +490,11 @@ document.getElementById('clear').onclick=clearAll;
 document.getElementById('trim').onclick=trim;
 document.getElementById('center').onclick=centerView;
 document.getElementById('exmpk').onclick=exportMpk;
-document.getElementById('gw').onchange=e=>setGrid(parseInt(e.target.value)||20,H);
-document.getElementById('gh').onchange=e=>setGrid(W,parseInt(e.target.value)||20);
+document.getElementById('gw').onchange=e=>{record();setGrid(parseInt(e.target.value)||20,H);};
+document.getElementById('gh').onchange=e=>{record();setGrid(W,parseInt(e.target.value)||20);};
 
 function updateStatus(){document.getElementById('status').textContent=
-  `Grid ${W}×${H} @(${ori[0]},${ori[1]}) · ${cities.size} cities · ${stations.size} stations · ${levelFree.size} level-free · tool ${tool} · ${currentName}${rot?(' rot '+rot):''}`;
+  `Grid ${W}×${H} @(${ori[0]},${ori[1]}) · ${stations.size} stations · ${levelFree.size} level-free · tool ${tool} · ${tileLabel(currentName)}${rot?(' rot '+rot):''}`;
   updateRotationVisible();
 }
 

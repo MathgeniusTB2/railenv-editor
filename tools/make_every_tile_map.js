@@ -1,5 +1,5 @@
 // Build a test map containing every valid Flatland tile (all 29 transitions:
-// 9 base tiles x 4 rotations) plus an empty cell, city/station markers and
+// 9 base tiles x 4 rotations) plus an empty cell, station markers and
 // level-free crossings. Writes:
 //   - a JSON map the editor can open (Open button)
 //   - a browser-written .pkl (pickle) and .mpk (native Flatland msgpack)
@@ -44,14 +44,13 @@ const rows = grid.length;
 
 for (const row of grid) for (const v of row) if (v < 0 || v > 65535) throw new Error("bad value " + v);
 
-// city markers (x, y, building index) and station markers (x, y)
-const cities = [[0, 0, 3], [1, 0, 7], [2, 0, 11], [3, 0, 18]];
+// station markers (x, y)
 const stations = [[0, rows - 1], [1, rows - 1], [2, rows - 1], [3, rows - 1]];
 // level-free diamond crossings (absolute x, y, rotation degrees) — row 6 is the diamond row
 const level_free = [[0, 6, 0], [2, 6, 90]];
 const levelFreeLocal = level_free.map(([x, y]) => [y, x]); // (row, col)
 
-const map = { width: cols, height: rows, origin: [0, 0], grid, cities, stations, level_free };
+const map = { width: cols, height: rows, origin: [0, 0], grid, stations, level_free };
 const jsonPath = path.join(outdir, "every_tile.json");
 fs.writeFileSync(jsonPath, JSON.stringify(map, null, 2));
 
@@ -59,7 +58,7 @@ const pklPath = path.join(outdir, "every_tile.pkl");
 const mpkPath = path.join(outdir, "every_tile.mpk");
 const roundtripPath = path.join(outdir, "every_tile.roundtrip.json");
 fs.writeFileSync(pklPath, Buffer.from(EnvPkl.buildEnvPkl(grid, seed, levelFreeLocal)));
-const mpk = EnvPkl.buildEnvMpk(grid, seed, { origin: map.origin, cities, stations, level_free });
+const mpk = EnvPkl.buildEnvMpk(grid, seed, { origin: map.origin, stations, level_free });
 fs.writeFileSync(mpkPath, Buffer.from(mpk));
 fs.writeFileSync(roundtripPath, JSON.stringify(EnvPkl.parseEnvMpk(mpk), null, 2));
 

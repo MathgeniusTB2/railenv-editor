@@ -73,7 +73,7 @@ def flatland_render(cells: np.ndarray) -> np.ndarray:
     return np.asarray(arr)
 
 
-def repro(g: np.ndarray, cities: set[tuple[int, int]]) -> Image.Image:
+def repro(g: np.ndarray, stations: set[tuple[int, int]]) -> Image.Image:
     m = json.load(open(ROOT / "web/assets/manifest.json"))
     cell = REPRO_CELL
     w, h = g.shape[1], g.shape[0]
@@ -119,7 +119,7 @@ def repro(g: np.ndarray, cities: set[tuple[int, int]]) -> Image.Image:
                     pt = rail.get(0)
                 if pt is not None:
                     put(pt, c, r)
-                if (c, r) in cities:
+                if (c, r) in stations:
                     put(station, c, r)
             else:
                 spr = rail.get(v)
@@ -129,13 +129,13 @@ def repro(g: np.ndarray, cities: set[tuple[int, int]]) -> Image.Image:
 
 
 def main() -> None:
-    cities = {(6, 7)}
+    stations = {(6, 7)}
     n = 16
     grid = sample(n)
 
     real = Image.fromarray(flatland_render(grid)).convert("RGBA")
     real = real.resize((n * REPRO_CELL, n * REPRO_CELL))
-    repro_pil = repro(grid, cities)
+    repro_pil = repro(grid, stations)
 
     real.save("/tmp/real.png")
     repro_pil.save("/tmp/repro.png")

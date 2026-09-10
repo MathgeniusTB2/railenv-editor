@@ -13,7 +13,7 @@ authors = [{ name = "MathgeniusTB2" }]
 dependencies = []
 
 [project.optional-dependencies]
-flatland = ["flatland-rl>=2.1"]
+flatland = ["flatland-rl>=4"]
 dev = ["pytest>=7", "ruff>=0.4", "playwright>=1.40", "pillow>=10", "numpy>=1.24"]
 
 [tool.pytest.ini_options]

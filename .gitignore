@@ -5,7 +5,6 @@ __pycache__/
 .eggs/
 build/
 dist/
-spec/
 
 # Virtual environments
 .venv/
@@ -23,4 +22,3 @@ env/
 
 # Artifacts
 *.pkl
-*.railproj
