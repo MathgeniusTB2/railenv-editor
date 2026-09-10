@@ -32,15 +32,30 @@ def _generate(tmp_path: Path) -> None:
 
 
 def test_every_tile_map_has_every_valid_tile(tmp_path: Path):
-    """The generated fixture covers all 29 valid Flatland transitions + empty."""
+    """The generated fixture covers all 29 valid Flatland transitions + empty.
+
+    The map is built from the 8 palette tiles x 4 rotations x 4 flips, so it
+    explicitly exercises both R and F (mirror) and reaches every valid tile.
+    """
     if shutil.which("node") is None:
         pytest.skip("node not available")
     _generate(tmp_path)
     data = json.loads((tmp_path / "every_tile.json").read_text())
-    assert data["width"] == 4
+    assert (data["width"], data["height"]) == (8, 9)   # 4 rotations + 4 flips per row
     values = {v for row in data["grid"] for v in row if v}
+    assert len(values) == 29
     assert values == ALL_TILES
     assert 33825 in values  # diamond crossing
+
+
+def test_catalogue_matches_flatland(flatland_available):
+    """The repo's tile catalogue equals Flatland's authoritative transition set."""
+    if not flatland_available:
+        pytest.skip("flatland not available")
+    from flatland.envs.grid.rail_env_grid import RailEnvTransitionsEnum
+
+    flatland_tiles = {int(t) for t in RailEnvTransitionsEnum if int(t) != 0}
+    assert flatland_tiles == ALL_TILES
 
 
 @pytest.mark.parametrize("ext", ["pkl", "mpk"])

@@ -1,6 +1,6 @@
 // Build a test map containing every valid Flatland tile (all 29 transitions:
-// 9 base tiles x 4 rotations) plus an empty cell, station markers and
-// level-free crossings. Writes:
+// the 8 editor palette tiles x 4 rotations x 4 flips) plus an empty row,
+// station markers and level-free crossings. Writes:
 //   - a JSON map the editor can open (Open button)
 //   - a browser-written .pkl (pickle) and .mpk (native Flatland msgpack)
 // Usage: node tools/make_every_tile_map.js [outdir]
@@ -18,16 +18,17 @@ const Bit = {
   build(p) { let nv = 0; for (const [f, t] of p) nv |= 1 << ((3 - f) * 4 + (3 - t)); return nv; },
   rotate(v, deg) { const k = ((deg % 360) / 90) | 0; if (!k) return v; const p = []; for (let f = 0; f < 4; f++) for (const t of this.exit(v, f)) p.push([f, t]);
     return this.build(p.map(([f, t]) => [(f + k) % 4, (t + k) % 4])); },
+  flip(v) { const sw = { 1: 3, 3: 1 }; const p = []; for (let f = 0; f < 4; f++) for (const t of this.exit(v, f)) p.push([f, t]);
+    return this.build(p.map(([f, t]) => [sw[f] ?? f, sw[t] ?? t])); },
 };
 
-// base palette values (from web/index.html TILES). The 9 base tiles, each rotated
-// through 4 x 90deg, cover all 29 valid Flatland transitions (both handednesses of
-// simple switch, all slips, and the diamond crossing).
+// the 8 rail tiles in the editor palette (web/index.html TILES). Each base tile
+// is emitted at 4 rotations and 4 flipped rotations -> all 29 valid Flatland
+// transitions (both handednesses of simple switch, all slips, the diamond).
 const base = [
   ["vertical_straight", 32800],
   ["right_turn_from_south", 16386],
   ["simple_switch_north_left", 37408],
-  ["simple_switch_north_right", 49186],
   ["symmetric_switch_from_south", 20994],
   ["single_slip_SW", 38433],
   ["double_slip_NW_SE", 52275],
@@ -35,18 +36,20 @@ const base = [
   ["dead_end_from_south", 8192],
 ];
 
-// one row per tile type; each column is a 90deg rotation -> every variant.
+// one row per base tile: cols 0-3 = rotations, cols 4-7 = flipped rotations.
 // A final all-empty row represents the empty tile.
-const cols = 4;
-const railRows = base.map((b) => Array.from({ length: cols }, (_, c) => Bit.rotate(b[1], c * 90)));
+const cols = 8;
+const rot = (v) => [0, 90, 180, 270].map((d) => Bit.rotate(v, d));
+const railRows = base.map((b) => rot(b[1]).concat(rot(Bit.flip(b[1]))));
 const grid = railRows.concat([Array.from({ length: cols }, () => 0)]);
 const rows = grid.length;
 
 for (const row of grid) for (const v of row) if (v < 0 || v > 65535) throw new Error("bad value " + v);
+const unique = new Set(grid.flat().filter((v) => v));
+if (unique.size !== 29) throw new Error("expected all 29 valid tiles, got " + unique.size);
 
-// station markers (x, y)
+// station markers (x, y) on the empty row; level-free diamonds on the diamond row
 const stations = [[0, rows - 1], [1, rows - 1], [2, rows - 1], [3, rows - 1]];
-// level-free diamond crossings (absolute x, y, rotation degrees) — row 6 is the diamond row
 const level_free = [[0, 6, 0], [2, 6, 90]];
 const levelFreeLocal = level_free.map(([x, y]) => [y, x]); // (row, col)
 
@@ -62,9 +65,9 @@ const mpk = EnvPkl.buildEnvMpk(grid, seed, { origin: map.origin, stations, level
 fs.writeFileSync(mpkPath, Buffer.from(mpk));
 fs.writeFileSync(roundtripPath, JSON.stringify(EnvPkl.parseEnvMpk(mpk), null, 2));
 
-console.log("tiles:  " + base.map(b => b[0]).join(", "));
+console.log("tiles:  " + base.map((b) => b[0]).join(", "));
 console.log("wrote:  " + jsonPath);
 console.log("wrote:  " + pklPath);
 console.log("wrote:  " + mpkPath);
 console.log("wrote:  " + roundtripPath);
-console.log("grid " + rows + "x" + cols + " (" + (rows * cols) + " cells, every valid tile x4 rotations + empty row)");
+console.log(`grid ${rows}x${cols} (${unique.size} unique tiles: 8 palette x 4 rotations x 4 flips + empty row)`);
