@@ -27,15 +27,16 @@ def _serve(directory: Path) -> tuple[socketserver.TCPServer, int]:
     return httpd, port
 
 
-def _zoom_out(page, delta_y: int = 500) -> None:
-    """Fire the editor's own Ctrl+wheel handler to zoom out and re-fit the view."""
+def _fit_view(page, margin: float = 0.92) -> None:
+    """Zoom so the loaded grid fills the canvas area, then centre it."""
     page.evaluate(
-        """(dy) => {
+        """(m) => {
             const cv = document.getElementById('cv');
-            cv.dispatchEvent(new WheelEvent('wheel', {deltaY: dy, ctrlKey: true, bubbles: true, cancelable: true}));
+            const z = Math.min(cv.clientWidth / (W * CELL), cv.clientHeight / (H * CELL)) * m;
+            zoom = Math.max(0.1, Math.min(20, z));
             centerView();
         }""",
-        delta_y,
+        margin,
     )
 
 
@@ -57,7 +58,7 @@ def main() -> None:
             # clean hero: the whole app with the demo network loaded
             page.set_input_files("#file", str(WEB / "testmaps" / "demo.json"))
             page.wait_for_timeout(500)
-            _zoom_out(page)
+            _fit_view(page)
             page.wait_for_timeout(300)
             page.locator("#wrap").screenshot(path=str(DOCS / "hero.png"))
 
