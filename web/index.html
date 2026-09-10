@@ -500,9 +500,18 @@ function updateStatus(){document.getElementById('status-text').textContent=
   updateRotationVisible();
 }
 
+function loadMapUrl(url){
+  fetch(url).then(r=>{
+    if(!r.ok)throw new Error(r.status+' '+r.statusText);
+    return url.toLowerCase().endsWith('.mpk') ? r.arrayBuffer().then(b=>loadMpk(new Uint8Array(b)))
+                                              : r.text().then(t=>loadJson(JSON.parse(t)));
+  }).catch(e=>alert('could not load '+url+': '+e));
+}
 function init(){
-  // start blank (empty 20x20 grid)
+  // start blank (empty 20x20 grid), then optionally load ?map=<url>
   initializing=false;bgSeed=bgFor(W,H);resizeCanvas();centerView();selectTile('vertical_straight');updateStatus();
+  const m=new URLSearchParams(location.search).get('map');
+  if(m)loadMapUrl(m);
 }
 </script>
 </body>
