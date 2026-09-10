@@ -116,6 +116,7 @@ let manifest=null, images={}, loaded=false;
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
 const CELL=60, wrap=document.getElementById('canvas-wrap'), inspBody=document.getElementById('insp-body');
 let zoom=1, pan={x:0,y:0};   // pan: screen-px translation of the world origin (infinite panning)
+let bgSeed=29;               // frozen terrain background constant (set per document; not changed by growth)
 
 fetch('assets/manifest.json').then(r=>r.json()).then(m=>{
   manifest=m; const jobs=[];
@@ -132,7 +133,7 @@ fetch('assets/manifest.json').then(r=>r.json()).then(m=>{
 });
 
 // ---------------- rendering (faithful port of graphics_pil set_rail_at) ----------------
-function bgConst(){return Math.ceil(Math.sqrt(W*W+H*H));}
+function bgFor(w,h){return Math.ceil(Math.sqrt(w*w+h*h));}
 function hasCity(c,r){return cities.has((ori[0]+c)+','+(ori[1]+r));}
 function cityIdx(c,r){const v=cities.get((ori[0]+c)+','+(ori[1]+r));return v==null?0:v;}
 function hasStation(c,r){return stations.has((ori[0]+c)+','+(ori[1]+r));}
@@ -145,13 +146,14 @@ function drawRotated(key,c,r,deg,alpha){const im=images[key];if(!im)return;
   ctx.translate(x+CELL/2,y+CELL/2); ctx.rotate((deg||0)*Math.PI/180); ctx.drawImage(im,-CELL/2,-CELL/2,CELL,CELL); ctx.restore();}
 function spriteFor(c,r){
   const g=grid[r][c]; if(g!==0)return 'r'+g;
-  const bg=bgConst(),nb=manifest.buildings.length,ns=manifest.scenery.length;
-  if(bg<=4+Math.ceil(((c*r+c)%10)/1)){
-    let a=bg%nb; if((c+r+c*r)%13>11)return 's'+(a%ns);
-    if((c+r+c*r)%3===0)a=(a+(c+r+c*r))%nb; return 'b'+a;
+  const X=ori[0]+c, Y=ori[1]+r;   // anchor terrain to absolute coords so growth never re-rolls it
+  const bg=bgSeed,nb=manifest.buildings.length,ns=manifest.scenery.length;
+  if(bg<=4+Math.ceil(((X*Y+X)%10)/1)){
+    let a=bg%nb; if((X+Y+X*Y)%13>11)return 's'+(a%ns);
+    if((X+Y+X*Y)%3===0)a=(a+(X+Y+X*Y))%nb; return 'b'+a;
   }
-  if(bg>5+((c*r+c)%3)||((c**3+r*r+c*r)%10===0)){
-    let a=bg-4,a2=a+(c+r+c*r+c**3+r**4); if(a2%64>11)a=a2; const al=a%ns;
+  if(bg>5+((X*Y+X)%3)||((X**3+Y*Y+X*Y)%10===0)){
+    let a=bg-4,a2=a+(X+Y+X*Y+X**3+Y**4); if(a2%64>11)a=a2; const al=a%ns;
     return (a2%50===49)?'w0':'s'+al;
   }
   return 'r0';
@@ -170,8 +172,8 @@ function render(){
     if(grid[r][c]===33825&&hasLevelFree(c,r)){drawRotated('r666',c,r,levelFreeRot(c,r));continue;}
     const key=spriteFor(c,r);
     if(key&&key==='s'+(manifest.scenery.length-1)){
-      const bg=bgConst(),a=bg-4,a2=a+(c+r+c*r+c**3+r**4);
-      if(a2%11>3&&c>1&&r%7===1&&grid[r][c-1]===0){drawSprite('d2_0',c-1,r);drawSprite('d2_1',c,r);}
+      const X=ori[0]+c,Y=ori[1]+r,a=bgSeed-4,a2=a+(X+Y+X*Y+X**3+Y**4);
+      if(a2%11>3&&X>1&&Y%7===1&&grid[r][c-1]===0){drawSprite('d2_0',c-1,r);drawSprite('d2_1',c,r);}
       else drawSprite(key,c,r);
     } else if(key)drawSprite(key,c,r);
   }
@@ -202,7 +204,7 @@ function render(){
 let hover=null, lastHoverKey=null;
 function resizeCanvas(){cv.width=Math.max(1,wrap.clientWidth);cv.height=Math.max(1,wrap.clientHeight);render();}
 function centerView(){pan.x=(wrap.clientWidth-W*CELL*zoom)/2;pan.y=(wrap.clientHeight-H*CELL*zoom)/2;render();}
-function setGrid(w,h){if(!w||!h)return;W=w;H=h;grid=Array.from({length:H},()=>Array(W).fill(0));cities.clear();stations.clear();levelFree.clear();ori=[0,0];resizeCanvas();updateStatus();}
+function setGrid(w,h){if(!w||!h)return;W=w;H=h;bgSeed=bgFor(W,H);grid=Array.from({length:H},()=>Array(W).fill(0));cities.clear();stations.clear();levelFree.clear();ori=[0,0];resizeCanvas();updateStatus();}
 
 // ---------------- growth (all directions, content preserved) ----------------
 function inAbs(X,Y){return X>=ori[0]&&X<ori[0]+W&&Y>=ori[1]&&Y<ori[1]+H;}
@@ -446,9 +448,9 @@ function deleteSel(){ if(!sel)return; record();
 
 // ---------------- undo (snapshots) ----------------
 const undo=[],redo=[];let initializing=true;
-function snap(){return JSON.stringify({W,H,ori,grid,cities:[...cities],stations:[...stations],levelFree:[...levelFree]});}
+function snap(){return JSON.stringify({W,H,ori,grid,bgSeed,cities:[...cities],stations:[...stations],levelFree:[...levelFree]});}
 function record(){if(initializing)return;undo.push(snap());if(undo.length>300)undo.shift();redo.length=0;}
-function apply(s){const d=JSON.parse(s);W=d.W;H=d.H;ori=d.ori;grid=d.grid;cities.clear();(d.cities||[]).forEach(e=>{if(Array.isArray(e))cities.set(e[0],e[1]==null?0:e[1]);else cities.set(e,0);});stations.clear();(d.stations||[]).forEach(k=>stations.add(k));levelFree.clear();(d.levelFree||[]).forEach(e=>{if(Array.isArray(e))levelFree.set(e[0],e[1]==null?0:e[1]);else levelFree.set(e,0);});resizeCanvas();updateStatus();}
+function apply(s){const d=JSON.parse(s);W=d.W;H=d.H;ori=d.ori;grid=d.grid;bgSeed=d.bgSeed==null?bgFor(W,H):d.bgSeed;cities.clear();(d.cities||[]).forEach(e=>{if(Array.isArray(e))cities.set(e[0],e[1]==null?0:e[1]);else cities.set(e,0);});stations.clear();(d.stations||[]).forEach(k=>stations.add(k));levelFree.clear();(d.levelFree||[]).forEach(e=>{if(Array.isArray(e))levelFree.set(e[0],e[1]==null?0:e[1]);else levelFree.set(e,0);});resizeCanvas();updateStatus();}
 function undoOp(){if(undo.length){redo.push(snap());apply(undo.pop());}}
 function redoOp(){if(redo.length){undo.push(snap());apply(redo.pop());}}
 function clearAll(){record();grid=Array.from({length:H},()=>Array(W).fill(0));cities.clear();stations.clear();levelFree.clear();resizeCanvas();}
@@ -476,12 +478,12 @@ document.getElementById('file').onchange=e=>{const f=e.target.files[0];if(!f)ret
     else loadMpk(buf);
   }catch(err){alert('bad file: '+err);}};
   rd.readAsArrayBuffer(f);e.target.value='';};
-function loadJson(d){ record(); W=d.width||20;H=d.height||20;ori=d.origin||[0,0];grid=d.grid.map(row=>row.slice());
+function loadJson(d){ record(); W=d.width||20;H=d.height||20;ori=d.origin||[0,0];bgSeed=bgFor(W,H);grid=d.grid.map(row=>row.slice());
   cities.clear();(d.cities||[]).forEach(c=>cities.set(c[0]+','+c[1],c[2]==null?0:c[2]));
   stations.clear();(d.stations||[]).forEach(c=>stations.add(c[0]+','+c[1]));
   levelFree.clear();(d.level_free||[]).forEach(c=>levelFree.set(c[0]+','+c[1],c[2]==null?0:c[2]));resizeCanvas();centerView();updateStatus();}
 function loadMpk(buf){ const d=EnvPkl.parseEnvMpk(buf); if(!d.grid)throw new Error('no grid'); record();
-  grid=d.grid.map(row=>row.slice()); H=grid.length; W=grid[0].length; ori=d.origin||[0,0];
+  grid=d.grid.map(row=>row.slice()); H=grid.length; W=grid[0].length; ori=d.origin||[0,0]; bgSeed=bgFor(W,H);
   cities.clear();(d.cities||[]).forEach(c=>cities.set(c[0]+','+c[1],c[2]==null?0:c[2]));
   stations.clear();(d.stations||[]).forEach(c=>stations.add(c[0]+','+c[1]));
   levelFree.clear();(d.level_free||[]).forEach(c=>levelFree.set(c[0]+','+c[1],c[2]==null?0:c[2]));resizeCanvas();centerView();updateStatus();}
@@ -538,7 +540,7 @@ function updateStatus(){document.getElementById('status').textContent=
 
 function init(){
   // start blank (empty 20x20 grid)
-  initializing=false;resizeCanvas();centerView();selectTile('vertical_straight');updateStatus();
+  initializing=false;bgSeed=bgFor(W,H);resizeCanvas();centerView();selectTile('vertical_straight');updateStatus();
 }
 </script>
 </body>
