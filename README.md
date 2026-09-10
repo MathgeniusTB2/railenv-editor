@@ -153,7 +153,7 @@ hovered and selected cell (value, 16-bit bits, markers) plus the grid status.
 | Arrow keys | Pan |
 | <kbd>Esc</kbd> | Close the diamond menu |
 
-<sub>¹ <kbd>R</kbd> and <kbd>F</kbd> apply only to rotatable rail tiles, not to Station or Empty.</sub>
+<sub>¹ <kbd>R</kbd> and <kbd>F</kbd> apply only to rotatable rail tiles, not to Station.</sub>
 
 ## Export
 

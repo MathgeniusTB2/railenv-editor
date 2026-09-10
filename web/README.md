@@ -35,7 +35,7 @@ python -m http.server 8080     # then open http://localhost:8080
 - **Open/Load** a saved `.mpk` (legacy JSON still accepted), **New** blank, **Undo/Redo**.
 - **Station markers**: **Station (`0`)** is a marker placed **on top of a cell** —
   it keeps the rail and renders over the track (like Flatland). Rail can be drawn
-  on a station cell; **Empty/Erase** clears rail + markers. Copy/paste, undo, trim
+  on a station cell; **Erase** clears rail + markers. Copy/paste, undo, trim
   and load all preserve it.
 - **Level-free diamond crossings** (over-/underpasses): the **▾** on the Diamond
   tile opens a dropdown — **Diamond** or **Level-free** (`L`). A level-free cell

@@ -72,7 +72,6 @@ const TILES = [
   {name:"diamond_crossing", value:33825, label:"Diamond", rot:true},
   {name:"dead_end_from_south", value:8192, label:"Dead-end", rot:true},
   {name:"station", value:0, label:"Station", rot:false},
-  {name:"empty", value:0, label:"Empty", rot:false},
 ];
 const VALUE = Object.fromEntries(TILES.map(t=>[t.name,t.value]));
 const ROT = Object.fromEntries(TILES.map(t=>[t.name,t.rot]));
@@ -80,7 +79,7 @@ VALUE.level_free_diamond=33825; ROT.level_free_diamond=true;    // Diamond tile 
 const LABELS={diamond_crossing:"Diamond", level_free_diamond:"Level-free diamond"};
 const HOTKEYS = {0:"station",1:"vertical_straight",2:"right_turn_from_south",3:"simple_switch_north_left",
   4:"symmetric_switch_from_south",5:"single_slip_SW",6:"double_slip_NW_SE",7:"diamond_crossing",8:"dead_end_from_south",l:"level_free_diamond"};
-const STATIONNAME="station", EMPTYNAME="empty", LEVELFREENAME="level_free_diamond";
+const STATIONNAME="station", LEVELFREENAME="level_free_diamond";
 
 // bit math (mirror of railtiles.py). N=0,E=1,S=2,W=3.
 const BLOCK=[12,8,4,0];
@@ -189,7 +188,6 @@ function render(){
     const hx=hover.c*CELL, hy=hover.r*CELL; let im=null;
     if(tool==="erase"){ctx.fillStyle='rgba(239,83,80,.35)';ctx.fillRect(hx,hy,CELL,CELL);}
     else if(currentName===STATIONNAME)im=images['stat'];
-    else if(currentName===EMPTYNAME){ctx.fillStyle='rgba(255,255,255,.55)';ctx.fillRect(hx,hy,CELL,CELL);}
     else if(currentName===LEVELFREENAME){drawRotated('r666',hover.c,hover.r,rot,.6);}
     else {
       const v=rot?Bit.rotate(current,rot):current; im=images['r'+v];
@@ -221,7 +219,6 @@ function placeAbs(X,Y){
   const k=X+','+Y;
   if(tool==="erase"){grid[r][c]=0;stations.delete(k);levelFree.delete(k);}   // clear rail + markers
   else if(currentName===STATIONNAME){stations.add(k);}                   // station marker (keep rail)
-  else if(currentName===EMPTYNAME){grid[r][c]=0;stations.delete(k);levelFree.delete(k);}
   else if(currentName===LEVELFREENAME){grid[r][c]=33825;levelFree.set(k,rot);}   // level-free diamond (keep markers)
   else {const v=rot?Bit.rotate(current,rot):current;grid[r][c]=v;levelFree.delete(k);}  // rail: auto-clear level-free
 }
@@ -235,7 +232,6 @@ function buildUI(){
     const el=document.createElement('div');el.className='tile';el.dataset.name=t.name;
     const img=document.createElement('img');
     img.src = t.name===STATIONNAME ? ('assets/'+manifest.station)
-            : t.name===EMPTYNAME ? ('assets/'+manifest.rail['0'])
             : ('assets/'+manifest.rail[String(t.value)]);
     el.appendChild(img);
     const k=document.createElement('div');k.className='k';
@@ -262,7 +258,7 @@ function buildUI(){
   toolsEl.appendChild(rotWrap);
   document.getElementById('rotbtns').style.display='none';
 }
-function selectTile(name){currentName=name;current=VALUE[name]||0;rot=0;setTool(name===EMPTYNAME?'erase':'paint');
+function selectTile(name){currentName=name;current=VALUE[name]||0;rot=0;setTool('paint');
   document.querySelectorAll('.tile').forEach(el=>el.classList.toggle('active',el.dataset.name===name||(name===LEVELFREENAME&&el.dataset.name==='diamond_crossing')));
   updateInspector();render();}
 function setTool(t){tool=t;document.querySelectorAll('#tools button[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));
