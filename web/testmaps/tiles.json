@@ -1,0 +1,122 @@
+[
+  {
+    "value": 0,
+    "name": "empty"
+  },
+  {
+    "value": 4,
+    "name": "dead_end_from_east"
+  },
+  {
+    "value": 72,
+    "name": "right_turn_from_east"
+  },
+  {
+    "value": 128,
+    "name": "dead_end_from_north"
+  },
+  {
+    "value": 256,
+    "name": "dead_end_from_west"
+  },
+  {
+    "value": 1025,
+    "name": "horizontal_straight"
+  },
+  {
+    "value": 1097,
+    "name": "simple_switch_west_right"
+  },
+  {
+    "value": 2064,
+    "name": "right_turn_from_north"
+  },
+  {
+    "value": 2136,
+    "name": "symmetric_switch_from_north"
+  },
+  {
+    "value": 3089,
+    "name": "simple_switch_east_left"
+  },
+  {
+    "value": 4608,
+    "name": "right_turn_from_west"
+  },
+  {
+    "value": 5633,
+    "name": "simple_switch_east_right"
+  },
+  {
+    "value": 6672,
+    "name": "symmetric_switch_from_west"
+  },
+  {
+    "value": 8192,
+    "name": "dead_end_from_south"
+  },
+  {
+    "value": 16386,
+    "name": "right_turn_from_south"
+  },
+  {
+    "value": 16458,
+    "name": "symmetric_switch_from_east"
+  },
+  {
+    "value": 17411,
+    "name": "simple_switch_west_left"
+  },
+  {
+    "value": 20994,
+    "name": "symmetric_switch_from_south"
+  },
+  {
+    "value": 32800,
+    "name": "vertical_straight"
+  },
+  {
+    "value": 32872,
+    "name": "simple_switch_south_left"
+  },
+  {
+    "value": 33825,
+    "name": "diamond_crossing"
+  },
+  {
+    "value": 33897,
+    "name": "single_slip_NE"
+  },
+  {
+    "value": 34864,
+    "name": "simple_switch_south_right"
+  },
+  {
+    "value": 35889,
+    "name": "single_slip_NW"
+  },
+  {
+    "value": 37408,
+    "name": "simple_switch_north_left"
+  },
+  {
+    "value": 38433,
+    "name": "single_slip_SW"
+  },
+  {
+    "value": 38505,
+    "name": "double_slip_NE_SW"
+  },
+  {
+    "value": 49186,
+    "name": "simple_switch_north_right"
+  },
+  {
+    "value": 50211,
+    "name": "single_slip_SE"
+  },
+  {
+    "value": 52275,
+    "name": "double_slip_NW_SE"
+  }
+]

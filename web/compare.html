@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tile coverage — RailEnv Editor vs Flatland</title>
+<style>
+  body{font-family:system-ui,sans-serif;margin:0;background:#eef2ee;color:#20262b}
+  header{padding:14px 18px;background:#f4f7f4;border-bottom:1px solid #cfd8cf}
+  h1{font-size:18px;margin:0 0 4px}
+  .sub{color:#4a555e;font-size:13px}
+  .summary{margin:12px 18px;padding:10px 14px;border-radius:8px;font-size:14px;font-weight:600}
+  .ok{background:#e3f4e6;color:#1b6b2e;border:1px solid #b6e0bf}
+  .bad{background:#fdecea;color:#a12a20;border:1px solid #f3c0bb}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;padding:12px 18px}
+  .card{background:#fff;border:1px solid #d5ddd5;border-radius:8px;padding:8px;text-align:center}
+  .card img{width:56px;height:56px;image-rendering:pixelated;background:#f4f7f4;border-radius:4px}
+  .card .val{font-size:11px;color:#68757f;margin-top:4px}
+  .card .name{font-size:11px;color:#20262b;margin-top:2px;word-break:break-word;line-height:1.2}
+  .card.miss{border-color:#e0a5a0;background:#fff6f5}
+  .card.dup{opacity:.55}
+  .mark{font-weight:700;margin-top:3px}
+  .mark.yes{color:#1b6b2e}
+  .mark.no{color:#a12a20}
+  section{padding:0 0 12px}
+  h2{font-size:13px;color:#4a555e;margin:16px 18px 0;text-transform:uppercase;letter-spacing:.04em}
+  code{background:#e6ece6;padding:1px 4px;border-radius:3px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Tile coverage — RailEnv Editor vs Flatland</h1>
+  <div class="sub">Every valid transition in <code>RailEnvTransitionsEnum</code>, the editor's PILSVG sprite for it, and whether the generated <code>every_tile</code> map contains it.</div>
+</header>
+<div id="summary" class="summary">loading…</div>
+<section>
+  <h2>Flatland catalogue</h2>
+  <div id="catalogue" class="grid"></div>
+</section>
+<section>
+  <h2>Editor palette × 4 rotations × 4 flips</h2>
+  <div id="palette" class="grid"></div>
+</section>
+<script>
+"use strict";
+const BLOCK=[12,8,4,0];
+const Bit={
+  exit(v,inc){const o=[];for(let d=0;d<4;d++)if(v&(1<<(BLOCK[inc]+(3-d))))o.push(d);return o;},
+  build(p){let nv=0;for(const [f,t] of p)nv|=1<<((3-f)*4+(3-t));return nv;},
+  rotate(v,deg){const k=((deg%360)/90)|0;if(!k)return v;const p=[];for(let f=0;f<4;f++)for(const t of this.exit(v,f))p.push([f,t]);
+    return this.build(p.map(([f,t])=>[(f+k)%4,(t+k)%4]));},
+  flip(v){const sw={1:3,3:1};const p=[];for(let f=0;f<4;f++)for(const t of this.exit(v,f))p.push([f,t]);
+    return this.build(p.map(([f,t])=>[sw[f]??f,sw[t]??t]));},
+};
+const PALETTE=[["vertical_straight",32800],["right_turn_from_south",16386],["simple_switch_north_left",37408],
+  ["symmetric_switch_from_south",20994],["single_slip_SW",38433],["double_slip_NW_SE",52275],
+  ["diamond_crossing",33825],["dead_end_from_south",8192]];
+
+(async()=>{
+  const [manifest, cat, map] = await Promise.all([
+    fetch("assets/manifest.json").then(r=>r.json()),
+    fetch("testmaps/tiles.json").then(r=>r.json()),
+    fetch("testmaps/every_tile.json").then(r=>r.json()),
+  ]);
+  const present = new Set(map.grid.flat().filter(v=>v));
+  const sprite = v => "assets/" + manifest.rail[String(v)];
+  const nonEmpty = cat.filter(t=>t.value!==0);
+  const missing = nonEmpty.filter(t=>!present.has(t.value));
+
+  const s = document.getElementById("summary");
+  s.className = "summary " + (missing.length ? "bad" : "ok");
+  s.textContent = missing.length
+    ? `${nonEmpty.length - missing.length}/${nonEmpty.length} covered — missing: ${missing.map(t=>t.value).join(", ")}`
+    : `All ${nonEmpty.length} valid Flatland tiles are covered by the generated map ✓`;
+
+  document.getElementById("catalogue").innerHTML = cat.map(t=>{
+    const has = t.value === 0 ? true : present.has(t.value);
+    return `<div class="card${has?"":" miss"}">` +
+      (t.value===0 ? `<div style="height:56px"></div>` : `<img src="${sprite(t.value)}" alt="">`) +
+      `<div class="val">${t.value}</div><div class="name">${t.name}</div>` +
+      `<div class="mark ${has?"yes":"no"}">${has?"✓ in map":"✗ missing"}</div></div>`;
+  }).join("");
+
+  const seen = new Set();
+  const cards = [];
+  for(const [name,v] of PALETTE){
+    const variants = [0,90,180,270].map(d=>Bit.rotate(v,d))
+      .concat([0,90,180,270].map(d=>Bit.rotate(Bit.flip(v),d)));
+    variants.forEach((val,i)=>{
+      const dup = seen.has(val); seen.add(val);
+      cards.push(`<div class="card${dup?" dup":""}"><img src="${sprite(val)}" alt="">` +
+        `<div class="val">${val}</div><div class="name">${name} · ${i<4?"R"+(i*90):"F"+((i-4)*90)}</div></div>`);
+    });
+  }
+  document.getElementById("palette").innerHTML = cards.join("");
+})();
+</script>
+</body>
+</html>
